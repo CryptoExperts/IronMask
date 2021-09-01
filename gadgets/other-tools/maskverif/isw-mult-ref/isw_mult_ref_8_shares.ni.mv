@@ -1,0 +1,241 @@
+proc AND:
+  inputs: a[0:7], b[0:7]
+  outputs: c[0:7]
+  randoms: r[0:35];
+
+
+  tmp0 = r[28] + r[29];
+  h0   = tmp0 + a[0];
+
+  tmp1 = r[29] + r[30];
+  h1   = tmp1 + a[1];
+
+  tmp2 = r[30] + r[31];
+  h2   = tmp2 + a[2];
+
+  tmp3 = r[31] + r[32];
+  h3   = tmp3 + a[3];
+
+  tmp4 = r[32] + r[33];
+  h4   = tmp4 + a[4];
+
+  tmp5 = r[33] + r[34];
+  h5   = tmp5 + a[5];
+
+  tmp6 = r[34] + r[35];
+  h6   = tmp6 + a[6];
+
+  tmp7 = r[35] + r[29];
+  h7   = tmp7 + a[7];
+
+
+
+  c[0] := h0 * b[0];
+  c[1] := h1 * b[1];
+  c[2] := h2 * b[2];
+  c[3] := h3 * b[3];
+  c[4] := h4 * b[4];
+  c[5] := h5 * b[5];
+  c[6] := h6 * b[6];
+  c[7] := h7 * b[7];
+
+  c[0] = ![c[0] + r[0]];
+  aibj := h0 * b[1];
+  ajbi := h1 * b[0];
+  tmp0 = ![aibj + r[0]];
+  tmp1 = ![tmp0 + ajbi];
+  c[1] = ![c[1] + tmp1];
+
+  c[0] = ![c[0] + r[1]];
+  aibj := h0 * b[2];
+  ajbi := h2 * b[0];
+  tmp0 = ![aibj + r[1]];
+  tmp1 = ![tmp0 + ajbi];
+  c[2] = ![c[2] + tmp1];
+
+  c[0] = ![c[0] + r[2]];
+  aibj := h0 * b[3];
+  ajbi := h3 * b[0];
+  tmp0 = ![aibj + r[2]];
+  tmp1 = ![tmp0 + ajbi];
+  c[3] = ![c[3] + tmp1];
+
+  c[0] = ![c[0] + r[3]];
+  aibj := h0 * b[4];
+  ajbi := h4 * b[0];
+  tmp0 = ![aibj + r[3]];
+  tmp1 = ![tmp0 + ajbi];
+  c[4] = ![c[4] + tmp1];
+
+  c[0] = ![c[0] + r[4]];
+  aibj := h0 * b[5];
+  ajbi := h5 * b[0];
+  tmp0 = ![aibj + r[4]];
+  tmp1 = ![tmp0 + ajbi];
+  c[5] = ![c[5] + tmp1];
+
+  c[0] = ![c[0] + r[5]];
+  aibj := h0 * b[6];
+  ajbi := h6 * b[0];
+  tmp0 = ![aibj + r[5]];
+  tmp1 = ![tmp0 + ajbi];
+  c[6] = ![c[6] + tmp1];
+
+  c[0] = ![c[0] + r[6]];
+  aibj := h0 * b[7];
+  ajbi := h7 * b[0];
+  tmp0 = ![aibj + r[6]];
+  tmp1 = ![tmp0 + ajbi];
+  c[7] = ![c[7] + tmp1];
+
+  c[1] = ![c[1] + r[7]];
+  aibj := h1 * b[2];
+  ajbi := h2 * b[1];
+  tmp0 = ![aibj + r[7]];
+  tmp1 = ![tmp0 + ajbi];
+  c[2] = ![c[2] + tmp1];
+
+  c[1] = ![c[1] + r[8]];
+  aibj := h1 * b[3];
+  ajbi := h3 * b[1];
+  tmp0 = ![aibj + r[8]];
+  tmp1 = ![tmp0 + ajbi];
+  c[3] = ![c[3] + tmp1];
+
+  c[1] = ![c[1] + r[9]];
+  aibj := h1 * b[4];
+  ajbi := h4 * b[1];
+  tmp0 = ![aibj + r[9]];
+  tmp1 = ![tmp0 + ajbi];
+  c[4] = ![c[4] + tmp1];
+
+  c[1] = ![c[1] + r[10]];
+  aibj := h1 * b[5];
+  ajbi := h5 * b[1];
+  tmp0 = ![aibj + r[10]];
+  tmp1 = ![tmp0 + ajbi];
+  c[5] = ![c[5] + tmp1];
+
+  c[1] = ![c[1] + r[11]];
+  aibj := h1 * b[6];
+  ajbi := h6 * b[1];
+  tmp0 = ![aibj + r[11]];
+  tmp1 = ![tmp0 + ajbi];
+  c[6] = ![c[6] + tmp1];
+
+  c[1] = ![c[1] + r[12]];
+  aibj := h1 * b[7];
+  ajbi := h7 * b[1];
+  tmp0 = ![aibj + r[12]];
+  tmp1 = ![tmp0 + ajbi];
+  c[7] = ![c[7] + tmp1];
+
+  c[2] = ![c[2] + r[13]];
+  aibj := h2 * b[3];
+  ajbi := h3 * b[2];
+  tmp0 = ![aibj + r[13]];
+  tmp1 = ![tmp0 + ajbi];
+  c[3] = ![c[3] + tmp1];
+
+  c[2] = ![c[2] + r[14]];
+  aibj := h2 * b[4];
+  ajbi := h4 * b[2];
+  tmp0 = ![aibj + r[14]];
+  tmp1 = ![tmp0 + ajbi];
+  c[4] = ![c[4] + tmp1];
+
+  c[2] = ![c[2] + r[15]];
+  aibj := h2 * b[5];
+  ajbi := h5 * b[2];
+  tmp0 = ![aibj + r[15]];
+  tmp1 = ![tmp0 + ajbi];
+  c[5] = ![c[5] + tmp1];
+
+  c[2] = ![c[2] + r[16]];
+  aibj := h2 * b[6];
+  ajbi := h6 * b[2];
+  tmp0 = ![aibj + r[16]];
+  tmp1 = ![tmp0 + ajbi];
+  c[6] = ![c[6] + tmp1];
+
+  c[2] = ![c[2] + r[17]];
+  aibj := h2 * b[7];
+  ajbi := h7 * b[2];
+  tmp0 = ![aibj + r[17]];
+  tmp1 = ![tmp0 + ajbi];
+  c[7] = ![c[7] + tmp1];
+
+  c[3] = ![c[3] + r[18]];
+  aibj := h3 * b[4];
+  ajbi := h4 * b[3];
+  tmp0 = ![aibj + r[18]];
+  tmp1 = ![tmp0 + ajbi];
+  c[4] = ![c[4] + tmp1];
+
+  c[3] = ![c[3] + r[19]];
+  aibj := h3 * b[5];
+  ajbi := h5 * b[3];
+  tmp0 = ![aibj + r[19]];
+  tmp1 = ![tmp0 + ajbi];
+  c[5] = ![c[5] + tmp1];
+
+  c[3] = ![c[3] + r[20]];
+  aibj := h3 * b[6];
+  ajbi := h6 * b[3];
+  tmp0 = ![aibj + r[20]];
+  tmp1 = ![tmp0 + ajbi];
+  c[6] = ![c[6] + tmp1];
+
+  c[3] = ![c[3] + r[21]];
+  aibj := h3 * b[7];
+  ajbi := h7 * b[3];
+  tmp0 = ![aibj + r[21]];
+  tmp1 = ![tmp0 + ajbi];
+  c[7] = ![c[7] + tmp1];
+
+  c[4] = ![c[4] + r[22]];
+  aibj := h4 * b[5];
+  ajbi := h5 * b[4];
+  tmp0 = ![aibj + r[22]];
+  tmp1 = ![tmp0 + ajbi];
+  c[5] = ![c[5] + tmp1];
+
+  c[4] = ![c[4] + r[23]];
+  aibj := h4 * b[6];
+  ajbi := h6 * b[4];
+  tmp0 = ![aibj + r[23]];
+  tmp1 = ![tmp0 + ajbi];
+  c[6] = ![c[6] + tmp1];
+
+  c[4] = ![c[4] + r[24]];
+  aibj := h4 * b[7];
+  ajbi := h7 * b[4];
+  tmp0 = ![aibj + r[24]];
+  tmp1 = ![tmp0 + ajbi];
+  c[7] = ![c[7] + tmp1];
+
+  c[5] = ![c[5] + r[25]];
+  aibj := h5 * b[6];
+  ajbi := h6 * b[5];
+  tmp0 = ![aibj + r[25]];
+  tmp1 = ![tmp0 + ajbi];
+  c[6] = ![c[6] + tmp1];
+
+  c[5] = ![c[5] + r[26]];
+  aibj := h5 * b[7];
+  ajbi := h7 * b[5];
+  tmp0 = ![aibj + r[26]];
+  tmp1 = ![tmp0 + ajbi];
+  c[7] = ![c[7] + tmp1];
+
+  c[6] = ![c[6] + r[27]];
+  aibj := h6 * b[7];
+  ajbi := h7 * b[6];
+  tmp0 = ![aibj + r[27]];
+  tmp1 = ![tmp0 + ajbi];
+  c[7] = ![c[7] + tmp1];
+
+  end
+
+verbose 1
+para noglitch NI AND

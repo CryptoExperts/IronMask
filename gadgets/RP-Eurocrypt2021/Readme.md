@@ -1,0 +1,1 @@
+Gadgets from the paper [On the Power of Expansion: More Efficient Constructions in the Random Probing Model](https://eprint.iacr.org/2021/434.pdf) by Sonia Belaïd, Matthieu Rivain, and Abdul Rahman Taleb, published at Eurocrypt 2021.
