@@ -1022,6 +1022,10 @@ void compute_RPE_coeffs(Circuit* circuit, int cores, int coeff_max, int t, int t
   }
   printf("\n");
 
+  if (coeff_max == -1) {
+    coeff_max = dim_red_data->old_circuit->length;
+  }
+
   // Computing leakage probability from coefficients
   double p[2];
   for (int i = 0; i < 2; i++) {
