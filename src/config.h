@@ -30,7 +30,7 @@
 #endif
 
 
-#ifdef MACOS
+#ifdef __APPLE__
 #include <sys/param.h>
 #include <sys/sysctl.h>
 static int __attribute__((unused)) get_number_of_procs() {
