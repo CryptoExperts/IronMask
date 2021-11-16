@@ -940,7 +940,7 @@ void compute_RPE_coeffs(Circuit* circuit, int cores, int coeff_max, int t, int t
   uint64_t** coeffs_RPE1 = compute_RPE1(circuit, dim_red_data, cores, coeff_max, t, t_output);
   uint64_t** coeffs_RPE2 = compute_RPE2(circuit, dim_red_data, cores, coeff_max, t, true);
 
-  uint64_t **coeffs_RPE12, **coeffs_RPE21;
+  uint64_t **coeffs_RPE12 = NULL, **coeffs_RPE21 = NULL;
   if (circuit->output_count == 2) {
     coeffs_RPE12 = compute_RPE_copy(circuit, dim_red_data, cores, coeff_max, t, 1);
     coeffs_RPE21 = compute_RPE_copy(circuit, dim_red_data, cores, coeff_max, t, 0);
@@ -948,7 +948,7 @@ void compute_RPE_coeffs(Circuit* circuit, int cores, int coeff_max, int t, int t
 
   // Compute amplification order
   int d1 = 0, d2 = 0, d12 = 0;
-  double c_d1, c_d2, c_d12;
+  double c_d1 = 0, c_d2 = 0, c_d12 = 0;
   for (int i = 0; i < circuit->total_wires+1; i++) {
     if (d1 && d2 && d12) break;
     if (d1 && circuit->secret_count == 1) break;

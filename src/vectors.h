@@ -11,6 +11,12 @@
 #define VECTOR_GROWTH_FACTOR 2
 #define VECTOR_INIT_SIZE_DEFAULT 10
 
+#ifdef __GNUC__
+#define MAYBE_UNUSED_VARIABLE __attribute__((unused))
+#else
+#define MAYBE_UNUSED_VARIABLE
+#endif
+
 
 #define DEFINE_VECTOR_TYPE(_name, _type)                            \
   typedef struct _ ## _name ##_vector {                             \
@@ -19,7 +25,7 @@
     _type* content;                                                 \
   } _name;                                                          \
                                                                     \
-  static _name empty_ ## _name = { .max_size = 0, .length = 0, .content = NULL }; \
+  static _name MAYBE_UNUSED_VARIABLE empty_ ## _name = { .max_size = 0, .length = 0, .content = NULL }; \
                                                                     \
   _name* _name##_make();                                            \
   _name* _name##_make_size(int max_size);                           \

@@ -476,15 +476,15 @@ VarVector* get_remove_candidates(Circuit* circuit, VarVector* subcircuit) {
   for (Var idx = 0; idx < subcircuit->length; idx++) {
     Var candidate = subcircuit->content[idx];
     int smaller_exists = 0, larger_exists = 0;
-    int smaller_idx = -1, larger_idx = -1;
+    //int smaller_idx = -1, larger_idx = -1;
     for (Var other_idx = 0; other_idx < subcircuit->length; other_idx++) {
       Var to_compare = subcircuit->content[other_idx];
       if (to_compare == candidate) continue;
       if (has_one_more_mult(circuit, candidate, to_compare)) {
-        smaller_idx = to_compare;
+        //smaller_idx = to_compare;
         smaller_exists = 1;
       } else if (has_one_more_mult(circuit, to_compare, candidate)) {
-        larger_idx = to_compare;
+        //larger_idx = to_compare;
         larger_exists = 1;
       }
     }
