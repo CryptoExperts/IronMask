@@ -43,6 +43,14 @@ void compute_rands_usage(Circuit* c) {
   i1_rands[0] = 1;
   i2_rands[1] = 1;
 
+  // We iterate over each probe (dependency), and, if they contain a
+  // random, we check what else it contains:
+  //
+  //  - if it contains an input share, then this random is associated
+  //    with the corresponding input.
+  //
+  //  - if it contains a multiplication, then this random is added to
+  //    out_rands.
   for (int i = 0; i < deps->length; i++) {
     Dependency* dep = deps->deps_exprs[i];
     if (dep[0]) {
@@ -63,6 +71,54 @@ void compute_rands_usage(Circuit* c) {
           out_rands[j] |= dep[j];
         }
         break;
+      }
+    }
+  }
+
+  // At this point, it's possible that some randoms are neither in
+  // i1_rands/i2_rands nor out_rands. For instance, consider the
+  // following gadget:
+  //
+  //      ta = a0 ^ r0
+  //      tb = b0 ^ r1
+  //      mt = ta * tb
+  //      ...
+  //      ha = r0 ^ r4
+  //      hb = r1 ^ r5
+  //      mh = ha * hb
+  //      ...
+  //      _ = mt + mh
+  //
+  // In this case, r4 and r5 are not directly added with an input or a
+  // multiplication. However, they are added to randoms (r0 and r1)
+  // that themselves are added to some input shares (namely, a0 and b0).
+  //
+  // To account for such cases, we now iterate over all dependencies,
+  // and check that all randoms are either in i1_rands, i2_rands or
+  // out_rands. If we find some lone randoms, we infer their "group"
+  // from other randoms of the dependency.
+  //
+  // (this could have been done in the previous step, but it seems
+  // more maintainable to do it separately)
+  for (int i = 0; i < deps->length; i++) {
+    Dependency* dep = deps->deps_exprs[i];
+    for (int j = first_rand_idx; j < non_mult_deps_count; j++) {
+      if (dep[j] && !i1_rands[j] && !i2_rands[j] && !out_rands[j]) {
+        // The random i does not have a group yet -> searching for
+        // other randoms in the dependency (one of them should have a
+        // group).
+        for (int k = first_rand_idx; k < non_mult_deps_count; k++) {
+          if (dep[k] && i1_rands[k]) {
+            i1_rands[j] |= dep[j];
+            break;
+          } else if (dep[k] && i2_rands[k]) {
+            i2_rands[j] |= dep[j];
+            break;
+          } else if (dep[k] && out_rands[k]) {
+            out_rands[j] |= dep[j];
+            break;
+          }
+        }
       }
     }
   }
@@ -193,7 +249,6 @@ void compute_bit_deps(Circuit* circuit) {
     mult_dep->bits_right = bit_deps[mult_dep->right_idx];
   }
 
-
   circuit->deps->bit_deps = bit_deps;
   memset(circuit->bit_out_rands, 0, RANDOMS_MAX_LEN * sizeof(*circuit->bit_out_rands));
   memset(circuit->bit_i1_rands,  0, RANDOMS_MAX_LEN * sizeof(*circuit->bit_i1_rands));
@@ -215,6 +270,8 @@ void compute_bit_deps(Circuit* circuit) {
         } else if (circuit->i2_rands[idx]) {
           circuit->bit_i2_rands[i] |= 1ULL << j;
         } else {
+          printf("Random %d (%s) is not in out_rands/i1_rands/i2_rands...\n",
+                 idx, circuit->deps->names[idx]);
           assert(false);
         }
 
