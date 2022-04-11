@@ -560,6 +560,14 @@ void advanced_dimension_reduction(Circuit* circuit) {
     return;
   }
 
+  if (circuit->glitch || circuit->transition) {
+    // We do not handle glitches and transitions in this optimization yet.
+    //
+    // TODO: actually, I'm wondering if glitches/transition aren't
+    // correctly handled in fact... Would be worthwhile to check.
+    return;
+  }
+
   printf("Starting advanced dimension reduction...\n");
 
   time_t start, end;
@@ -715,7 +723,6 @@ bool is_elementary(Circuit* circuit, Dependency* dep) {
 // to expand almost-failures with elementary deterministic probes to
 // obtain actual failures.
 DimRedData* remove_elementary_wires(Circuit* circuit) {
-  // TODO: print error if glitches are enabled
   DimRedData* data_ret = malloc(sizeof(*data_ret));
   data_ret->length = circuit->secret_count * circuit->share_count;
   data_ret->elementary_wires = malloc(circuit->secret_count * circuit->share_count *
@@ -746,7 +753,7 @@ DimRedData* remove_elementary_wires(Circuit* circuit) {
 
   for (int i = 0; i < deps->length; i++) {
     Dependency* dep = deps->deps[i]->content[0];
-    if (is_elementary(circuit, dep)) {
+    if (deps->deps[i]->length == 1 && is_elementary(circuit, dep)) {
       add_to_elem_array(circuit, i, data_ret->elementary_wires);
       VarVector_push(data_ret->removed_wires, i);
       continue;
@@ -804,6 +811,7 @@ void remove_randoms(Circuit* circuit) {
     if (i < non_mult_deps_count - circuit->secret_count) {
       // Checking that it's actually a random, just to be sure.
       int rand_count = 0;
+      assert(deps->deps[i]->length == 1);
       for (int j = circuit->secret_count; j < non_mult_deps_count; j++) {
         rand_count += deps->deps[i]->content[0][j];
       }
