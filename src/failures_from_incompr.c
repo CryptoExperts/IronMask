@@ -347,10 +347,10 @@ void compute_failures_from_incompressibles(const Circuit* c, Trie* incompr,
     add_incompr_to_map(next, incompr, i+1);
     update_coeffs_with_hash(c, coeffs, next);
     if (concise) {
-      printf("%lu, ", coeffs[i+1]);
+      printf("%llu, ", coeffs[i+1]);
       fflush(stdout);
     } else {
-      printf("c%d = %lu\n", i+1, coeffs[i+1]);
+      printf("c%d = %llu\n", i+1, coeffs[i+1]);
 
       printf("Regenerated: %d%% (%d / %d)\n",
              (int)((double)regenerated/next->count*100),
@@ -366,12 +366,12 @@ void compute_failures_from_incompressibles(const Circuit* c, Trie* incompr,
 
   if (concise) {
     for (int i = coeff_max+1; i < c->total_wires-1; i++) {
-      printf("%lu, ", coeffs[i]);
+      printf("%llu, ", coeffs[i]);
     }
-    printf("%lu ]\n", coeffs[c->total_wires]);
+    printf("%llu ]\n", coeffs[c->total_wires]);
   } else {
     for (int i = coeff_max+1; i < c->total_wires; i++) {
-      printf("c%d = %lu\n", i, coeffs[i]);
+      printf("c%d = %llu\n", i, coeffs[i]);
     }
   }
 

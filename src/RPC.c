@@ -90,7 +90,7 @@ void compute_RPC_coeffs(Circuit* circuit, int cores, int coeff_max,
       coeffs[size] = max(coeffs[size], coeffs_out_comb[i][size]);
     }
 
-    printf("%lu, ", coeffs[size]);
+    printf("%llu, ", coeffs[size]);
     fflush(stdout);
   }
 
@@ -99,7 +99,7 @@ void compute_RPC_coeffs(Circuit* circuit, int cores, int coeff_max,
     for (unsigned j = 0; j < out_comb_len; j++) {
       coeffs[i] = max(coeffs[i], coeffs_out_comb[j][i]);
     }
-    printf("%lu%s ", coeffs[i], i == circuit->total_wires ? "" : ",");
+    printf("%llu%s ", coeffs[i], i == circuit->total_wires ? "" : ",");
   }
   printf("]\n");
 

@@ -24,14 +24,6 @@
 #define max(_a,_b) ((_a) >= (_b) ? (_a) : (_b))
 
 
-// This structure stores randoms used for the Gauss elimination.
-typedef struct _gauss_rand {
-  bool is_set;
-  int idx;
-  uint64_t mask;
-} GaussRand;
-
-
 #if 0
 // V1 -- not functional
 //
@@ -300,137 +292,6 @@ int set_contained_shares(char* leaky_inputs, Dependency* secret_deps,
   return ret;
 }
 
-// Checks if the tuple |local_deps| is a failure when adding randoms
-// (that were removed from the circuit by the function
-// |remove_randoms| of dimensions.c).
-int is_failure_with_randoms(const Circuit* circuit,
-                            BitDep** local_deps, GaussRand* gauss_rands,
-                            int local_deps_len, int t_in,
-                            int comb_free_space, Dependency shares_to_ignore, bool PINI) {
-  if (comb_free_space == 0) return 0;
-  /* printf("Trying to expand with randoms\n"); */
-  /* printf("Tuple: {\n"); */
-  /* for (int i = 0; i < local_deps_len; i++) { */
-  /*   printf("  [ %d %d | %016lx | ", local_deps[i]->secrets[0], local_deps[i]->secrets[1], */
-  /*          local_deps[i]->randoms); */
-  /*   for (int j = 0; j < 1+circuit->deps->mult_deps->length/64; j++) { */
-  /*     printf("%016lx ", local_deps[i]->mults[j]); */
-  /*   } */
-  /*   printf("]\n"); */
-  /* } */
-  /* printf("}\n"); */
-
-
-  DependencyList* deps = circuit->deps;
-  int secret_count = circuit->secret_count;
-  int random_count = circuit->random_count + secret_count;
-  int deps_size = deps->deps_size;
-  int mult_count = deps->mult_deps->length;
-  int non_mult_deps_count = deps_size - mult_count;
-  int bit_rand_len = 1 + random_count / 64;
-  int bit_mult_len = 1 + mult_count / 64;
-
-  // Precomputing secrets of each element of |local_deps|
-  Dependency secrets[local_deps_len][2];
-  for (int i = 0; i < local_deps_len; i++) {
-    secrets[i][0] = local_deps[i]->secrets[0];
-    secrets[i][1] = local_deps[i]->secrets[1];
-    for (int j = 0; j < bit_mult_len; j++) {
-      uint64_t mult_elem = local_deps[i]->mults[j];
-      while (mult_elem != 0) {
-        int mult_idx_in_elem = __builtin_ia32_lzcnt_u64(mult_elem);
-        mult_elem &= ~(1ULL << (63-mult_idx_in_elem));
-        int mult_idx = j * 64 + (63-mult_idx_in_elem);
-        MultDependency* mult_dep = deps->mult_deps->deps[mult_idx];
-        secrets[i][0] |= mult_dep->contained_secrets[0];
-        secrets[i][1] |= mult_dep->contained_secrets[1];
-      }
-    }
-  }
-
-  // Collecting all randoms of |local_deps| in the binary array |randoms|.
-  uint64_t randoms[bit_rand_len];
-  memset(randoms, 0, bit_rand_len * sizeof(*randoms));
-  for (int i = 0; i < local_deps_len; i++) {
-    for (int j = 0; j < bit_rand_len; j++) {
-      randoms[j] |= local_deps[i]->randoms[j];
-    }
-  }
-
-  // Building the array |randoms_arr| that contains the index of the
-  // randoms in |local_deps|.
-  Var randoms_arr[non_mult_deps_count];
-  int randoms_arr_len = 0;
-  for (int i = 0; i < bit_rand_len; i++) {
-    uint64_t rand_elem = randoms[i];
-    while (rand_elem != 0) {
-      int rand_idx_in_elem = 63-__builtin_ia32_lzcnt_u64(rand_elem);
-      rand_elem &= ~(1ULL << rand_idx_in_elem);
-      randoms_arr[randoms_arr_len++] = rand_idx_in_elem + i*64;
-    }
-  }
-
-  // Generating all combinations of randoms of |randoms_arr| and
-  // checking if they make the tuple become a failure.
-  Comb randoms_comb[randoms_arr_len];
-  for (int size = 1; size <= comb_free_space && size <= randoms_arr_len; size++) {
-    for (int i = 0; i < size; i++) randoms_comb[i] = i;
-    do {
-      Comb real_comb[size];
-      for (int i = 0; i < size; i++) real_comb[i] = randoms_arr[randoms_comb[i]];
-      uint64_t selected_randoms[bit_rand_len];
-      memset(selected_randoms, 0, bit_rand_len * sizeof(*selected_randoms));
-      for (int i = 0; i < size; i++) {
-        int idx    = real_comb[i] / 64;
-        int offset = 63-__builtin_ia32_lzcnt_u64(real_comb[i]);
-        selected_randoms[idx] |= 1ULL << offset;
-      }
-
-      Dependency secret_deps[secret_count];
-      secret_deps[0] = secret_deps[1] = 0;
-
-      // Computing which secret shares are leaked
-      for (int i = 0; i < local_deps_len; i++) {
-        if (!gauss_rands[i].is_set) {
-          secret_deps[0] |= secrets[i][0];
-          if (secret_count == 2) secret_deps[1] |= secrets[i][1];
-        } else {
-          int all_rands_selected = 1;
-          for (int j = 0; j < bit_rand_len; j++) {
-            if ((local_deps[i]->randoms[j] & selected_randoms[j]) !=
-                local_deps[i]->randoms[j]) {
-              all_rands_selected = 0;
-              break;
-            }
-          }
-          if (all_rands_selected) {
-            // |selected_randoms| fully unmasks |local_deps[i]|
-            secret_deps[0] |= secrets[i][0];
-            secret_deps[1] |= secrets[i][1];
-          }
-        }
-      }
-
-      if (PINI) {
-        secret_deps[0] |= secret_deps[1];
-      }
-
-      // Checking if enough secret shares are leaking for the tuple to
-      // be a failure.
-      for (int k = 0; k < secret_count; k++) {
-        secret_deps[k] &= ~shares_to_ignore;
-        if (Is_leaky(secret_deps[k], t_in, comb_free_space-size)) {
-          return 1;
-        }
-      }
-
-    } while (incr_comb_in_place(randoms_comb, size, randoms_arr_len));
-  }
-
-  /* printf("Didn't manage to get a failure...\n"); */
-
-  return 0;
-}
 
 // |gauss_deps|: the dependencies after gauss elimination up to index
 //               |idx| (excluded). Note that even if an element is
@@ -461,7 +322,7 @@ static void gauss_step(BitDep* real_dep,
   for (int i = 0; i < idx; i++) {
     if (!gauss_rands[i].is_set) continue;
     int r_idx  = gauss_rands[i].idx;
-    int r_mask = gauss_rands[i].mask;
+    uint64_t r_mask = gauss_rands[i].mask;
     if (dep_target->randoms[r_idx] & r_mask) {
       dep_target->secrets[0] ^= gauss_deps[i]->secrets[0];
       dep_target->secrets[1] ^= gauss_deps[i]->secrets[1];
@@ -471,6 +332,7 @@ static void gauss_step(BitDep* real_dep,
       for (int j = 0; j < bit_mult_len; j++) {
         dep_target->mults[j] ^= gauss_deps[i]->mults[j];
       }
+      dep_target->out ^= gauss_deps[i]->out;
     }
   }
 }
@@ -489,7 +351,167 @@ static void set_gauss_rand(BitDep** deps, GaussRand* gauss_rands,
       return;
     }
   }
+  gauss_rands[idx].mask = 0;
   gauss_rands[idx].is_set = 0;
+}
+
+// Checks if the tuple |local_deps| is a failure when adding randoms
+// (that were removed from the circuit by the function
+// |remove_randoms| of dimensions.c).
+static int is_failure_with_randoms(const Circuit* circuit,
+                            BitDep** local_deps, GaussRand* gauss_rands, BitDep** local_deps_copy, GaussRand* gauss_rands_copy,
+                            int local_deps_len, int t_in,
+                            int comb_free_space, Dependency shares_to_ignore, bool PINI) {
+  if (comb_free_space == 0) return 0;
+  /* printf("Trying to expand with randoms\n"); */
+  /* printf("Tuple: {\n"); */
+  /* for (int i = 0; i < local_deps_len; i++) { */
+  /*   printf("  [ %d %d | %016lx | ", local_deps[i]->secrets[0], local_deps[i]->secrets[1], */
+  /*          local_deps[i]->randoms); */
+  /*   for (int j = 0; j < 1+circuit->deps->mult_deps->length/64; j++) { */
+  /*     printf("%016lx ", local_deps[i]->mults[j]); */
+  /*   } */
+  /*   printf("]\n"); */
+  /* } */
+  /* printf("}\n"); */
+
+  DependencyList* deps = circuit->deps;
+  int secret_count = circuit->secret_count;
+  int random_count = circuit->random_count + secret_count;
+  int deps_size = deps->deps_size;
+  int mult_count = deps->mult_deps->length;
+  int non_mult_deps_count = deps_size - mult_count;
+  int bit_rand_len = 1 + random_count / 64;
+  int bit_mult_len = 1 + mult_count / 64;
+
+  // Collecting all randoms of |local_deps| in the binary array |randoms|.
+  uint64_t randoms[bit_rand_len];
+  memset(randoms, 0, bit_rand_len * sizeof(*randoms));
+  for (int i = 0; i < local_deps_len; i++) {
+    for (int j = 0; j < bit_rand_len; j++) {
+      randoms[j] |= local_deps[i]->randoms[j];
+    }
+  }
+
+  // if(pr){
+  //   for (int j = 0; j < bit_rand_len; j++) {
+  //     printf("%llu\n",randoms[j]);
+  //     printf("rand_count = %d\n", circuit->random_count);
+  //   }
+  // }
+
+  // Building the array |randoms_arr| that contains the index of the
+  // randoms in |local_deps|.
+  Var randoms_arr[non_mult_deps_count];
+  int randoms_arr_len = 0;
+  for (int i = 0; i < bit_rand_len; i++) {
+    uint64_t rand_elem = randoms[i];
+    while (rand_elem != 0) {
+      int rand_idx_in_elem = 63-__builtin_ia32_lzcnt_u64(rand_elem);
+      rand_elem &= ~(1ULL << rand_idx_in_elem);
+      randoms_arr[randoms_arr_len++] = rand_idx_in_elem + i*64;
+    }
+  }
+
+  // if(pr){
+  //   printf("Free Space = %d\n", comb_free_space);
+  //   printf("Elems : ");
+  //   for(int i=0; i<randoms_arr_len; i++){
+  //     printf("%hu ", randoms_arr[i]);
+  //   }
+  //   printf("\n");
+  // }
+
+  int copy_size = 0;
+
+  // Generating all combinations of randoms of |randoms_arr| and
+  // checking if they make the tuple become a failure.
+  Comb randoms_comb[randoms_arr_len];
+  //int size = min(comb_free_space, randoms_arr_len);
+  for (int size = 1; size <= comb_free_space && size <= randoms_arr_len; size++) {
+    for (int i = 0; i < size; i++) randoms_comb[i] = i;
+    do {
+
+      Comb real_comb[size];
+      for (int i = 0; i < size; i++) real_comb[i] = randoms_arr[randoms_comb[i]];
+      uint64_t selected_randoms[bit_rand_len];
+      memset(selected_randoms, 0, bit_rand_len * sizeof(*selected_randoms));
+
+      // if(pr){
+      //   printf("randoms_comb comb = ");
+      //   for (int i = 0; i < comb_free_space; i++){ printf("%u ", randoms_comb[i]); }
+      //   printf("\n");
+      // }
+
+      for (int i = 0; i < size; i++) {
+        // if(pr) printf("real comb = %d ", real_comb[i]);
+        int idx    = real_comb[i] / 64;
+        // if(pr) printf(", idx = %d ", idx);
+        // int offset = 63-__builtin_ia32_lzcnt_u64(real_comb[i]);
+        // if(pr) printf(", offset = %d\n", offset);
+        selected_randoms[idx] |= 1ULL << real_comb[i];
+      }
+
+      // if(pr){
+      //   //selected_randoms[0] = 1 << 6;
+      //   for (int j = 0; j < bit_rand_len; j++) {
+      //     printf("selected = %llu\n",selected_randoms[j]);
+      //   }
+        
+      //   //printf("selected new = %lu\n",selected_randoms[0] & randoms[0]);
+      // }
+
+      Dependency secret_deps[secret_count];
+      secret_deps[0] = secret_deps[1] = 0;
+      copy_size = 0;
+
+      // Computing which secret shares are leaked
+      for (int i = 0; i < local_deps_len; i++) {
+        if (!gauss_rands[i].is_set) {
+          secret_deps[0] |= local_deps[i]->secrets[0];
+          if (secret_count == 2) secret_deps[1] |= local_deps[i]->secrets[1];
+        } else {
+
+          memcpy(local_deps_copy[copy_size], local_deps[i], sizeof(*local_deps[i]));
+          for (int j = 0; j < bit_rand_len; j++) {
+            local_deps_copy[copy_size]->randoms[j] = (local_deps[i]->randoms[j] & selected_randoms[j]) ^ local_deps[i]->randoms[j];
+          }
+          copy_size ++;
+        }
+      }
+
+      for (int i = 0; i < copy_size; i++) {
+          gauss_step(local_deps_copy[i], local_deps_copy, gauss_rands_copy,
+                    bit_rand_len, bit_mult_len, i);
+          set_gauss_rand(local_deps_copy, gauss_rands_copy, i, bit_rand_len);
+      }
+
+      for (int i = 0; i < copy_size; i++) {
+        if (!gauss_rands_copy[i].is_set) {
+          secret_deps[0] |= local_deps_copy[i]->secrets[0];
+          if (secret_count == 2) secret_deps[1] |= local_deps_copy[i]->secrets[1];
+        }
+      }
+
+      if (PINI) {
+        secret_deps[0] |= secret_deps[1];
+      }
+
+      // Checking if enough secret shares are leaking for the tuple to
+      // be a failure.
+      for (int k = 0; k < secret_count; k++) {
+        secret_deps[k] &= ~shares_to_ignore;
+        if (Is_leaky(secret_deps[k], t_in, comb_free_space-size)) {
+          return 1;
+        }
+      }
+
+    } while (incr_comb_in_place(randoms_comb, size, randoms_arr_len));
+  }
+
+  /* printf("Didn't manage to get a failure...\n"); */
+
+  return 0;
 }
 
 
@@ -979,10 +1001,13 @@ int _verify_tuples(const Circuit* circuit, // The circuit
   // Local dependencies
   int local_deps_max_size = deps->length * 10; // sounds reasonable?
   BitDep* local_deps[local_deps_max_size];
+  BitDep* local_deps_copy[local_deps_max_size];
   for (int i = 0; i < local_deps_max_size; i++) {
     local_deps[i] = alloca(sizeof(**local_deps));
+    local_deps_copy[i] = alloca(sizeof(**local_deps_copy));
   }
   GaussRand gauss_rands[local_deps_max_size];
+  GaussRand gauss_rands_copy[local_deps_max_size];
 
   // Used when spliting the tuple in 2 (vars depending on 1st and 2nd
   // output)
@@ -1107,6 +1132,28 @@ int _verify_tuples(const Circuit* circuit, // The circuit
                                         first_invalid_local_deps_index);
     first_invalid_local_deps_index = comb_len;
 
+    // if(curr_comb[0] == 23 && curr_comb[1] == 19 && curr_comb[2] == 0 && curr_comb[3] == 3 && curr_comb[4] == 4 && curr_comb[5] == 12){
+    //   pr = true;
+    //   printf("After Gauss: {\n");
+    //   for (int i = 0; i < local_deps_len; i++) {
+    //     printf("  [ %lu %lu | ",
+    //               local_deps[i]->secrets[0], local_deps[i]->secrets[1]);
+    //     for (int k = 0; k < bit_rand_len; k++){
+    //       printf("%llu ", local_deps[i]->randoms[k]);
+    //     }
+    //     printf(" | "); 
+    //     if(circuit->contains_mults){
+    //       for (int k = 0; k < bit_mult_len; k++){
+    //         printf("%llu ", local_deps[i]->mults[k]);
+    //       }
+    //     } 
+    //     printf("| %u ", local_deps[i]->out); 
+    //     printf("] -- gauss_rand = %llu\n", gauss_rands[i].mask);
+      
+    //   }
+    //   printf("\n");
+    // }
+
     /* printf("After Gauss: {\n"); */
     /* for (int i = 0; i < local_deps_len; i++) { */
     /*   printf("  [ %02x %02x | %016lx | ", */
@@ -1124,7 +1171,7 @@ int _verify_tuples(const Circuit* circuit, // The circuit
                                comb_free_space, shares_to_ignore, PINI)) {
         goto process_failure;
       } else if (!has_random &&
-                 is_failure_with_randoms(circuit, local_deps, gauss_rands,
+                 is_failure_with_randoms(circuit, local_deps, gauss_rands, local_deps_copy, gauss_rands_copy,
                                          local_deps_len, t_in,
                                          comb_free_space, shares_to_ignore, PINI)) {
         goto process_failure;
@@ -1172,7 +1219,7 @@ int _verify_tuples(const Circuit* circuit, // The circuit
             Is_leaky(secret_share_1, t_in, comb_free_space)) {
           goto process_failure;
         } else if (!has_random &&
-                   is_failure_with_randoms(circuit, local_deps, gauss_rands,
+                   is_failure_with_randoms(circuit, local_deps, gauss_rands, local_deps_copy, gauss_rands_copy,
                                            local_deps_len, t_in,
                                            comb_free_space, shares_to_ignore, PINI)) {
           goto process_failure;
@@ -1283,6 +1330,8 @@ int _verify_tuples(const Circuit* circuit, // The circuit
 
     process_failure:
     // The tuple is a failure
+    // printf("COMB_LEN = %d\n", comb_len);
+    // printf("COMB_FREE_SPACE = %d\n", comb_free_space);
     if (failure_callback) {
       if (!has_random) {
         printf("A failure was found. Some randoms might be missing from the tuple you get.\n");
@@ -1608,7 +1657,729 @@ int find_first_failure(const Circuit* circuit, // The circuit
                                  max_len, dim_red_data, has_random, first_tuple,
                                  -1, // tuple_count
                                  include_outputs, shares_to_ignore, PINI,
-                                 true, // stop at first failure
+                                 false, // stop at first failure
                                  false, // only_one_tuple
                                  incompr_tuples, failure_callback, data);
 }
+
+
+int find_first_failure_freeSNI_IOS(const Circuit* c,             // The circuit
+                       int cores,             // How many threads to use
+                       int comb_len,                 // The length of the tuples
+                       int comb_free_space,
+                       const DimRedData* dim_red_data, // Data to generate the actual tuples
+                                                       // after the dimension reduction
+                       bool has_random,  // Should be false if randoms have been removed
+                       BitDep** output_deps,
+                       GaussRand * output_gauss_rands,
+                       void (failure_callback)(const Circuit*,Comb*, int, SecretDep*, void* data),
+                       //     ^^^^^^^^^^^^^^^^
+                       // The function to call when a failure is found
+                       void* data, // additional data to pass to |failure_callback|
+                       bool freesni,
+                       bool ios) {
+
+  if (cores == 1){
+    return _verify_tuples_freeSNI_IOS(c, 
+                              comb_len,
+                              comb_free_space,
+                              dim_red_data,
+                              has_random,
+                              true, // stop at first failure
+                              output_deps,
+                              output_gauss_rands,
+                              failure_callback, 
+                              data,
+                              freesni,
+                              ios);
+  }
+  else{
+    printf("MULTI CORES VERIFICATION NOT SUPPORTED YET FOR FREESNI / IOS\n");
+    return 1;
+  }
+  return 1;
+}
+
+
+static void compute_input_secrets(const Circuit* circuit, BitDep* dep, Dependency secrets[2], int mult_count, bool xor){
+  if(! circuit->contains_mults){
+    secrets[0] = dep->secrets[0];
+    secrets[1] = dep->secrets[1];
+
+    if(xor){
+      secrets[0] = secrets[0] ^ ((1 << circuit->share_count)-1);
+
+      if(circuit->secret_count > 1)
+        secrets[1] = secrets[1] ^ ((1 << circuit->share_count)-1);
+    }
+  }
+  else{
+    int bit_mult_len = (mult_count / 64) + (mult_count % 64 != 0);
+    secrets[0] = 0;
+    secrets[1] = 0;
+    for (int i = 0; i < bit_mult_len-1; i++) {
+      uint64_t mult_elem = dep->mults[i];
+      if(xor){
+        mult_elem = mult_elem ^ 0xffffffffffffffff;
+      }
+      while (mult_elem != 0) {
+        int mult_idx_in_elem = __builtin_ia32_lzcnt_u64(mult_elem);
+        mult_elem &= ~(1ULL << (63-mult_idx_in_elem));
+        int mult_idx = i * 64 + (63-mult_idx_in_elem);
+        Dependency* this_secret_shares = circuit->deps->mult_deps->deps[mult_idx]->contained_secrets;
+        // printf("contained secrets = %lu %lu\n", this_secret_shares[0], this_secret_shares[1]);
+        secrets[0] |= this_secret_shares[0];
+        secrets[1] |= this_secret_shares[1];
+      }
+    }
+    int i = bit_mult_len-1;
+    uint64_t mult_elem = dep->mults[i];
+    if(xor){
+      if(mult_count % 64 == 0){
+        mult_elem = mult_elem ^ 0xffffffffffffffff;
+      }
+      else{
+         mult_elem = mult_elem ^ ((1ULL << (mult_count % 64)) - 1);
+      }
+      // if(mult_count <= 64){
+      //   mult_elem = mult_elem ^ ((1ULL << mult_count) - 1);
+      // }
+      // else{
+      //   mult_elem = mult_elem ^ (1 << (mult_count % 64));
+      // }
+    }
+    while (mult_elem != 0) {
+      int mult_idx_in_elem = __builtin_ia32_lzcnt_u64(mult_elem);
+      mult_elem &= ~(1ULL << (63-mult_idx_in_elem));
+      int mult_idx = i * 64 + (63-mult_idx_in_elem);
+      Dependency* this_secret_shares = circuit->deps->mult_deps->deps[mult_idx]->contained_secrets;
+      // printf("contained secrets = %lu %lu\n", this_secret_shares[0], this_secret_shares[1]);
+      secrets[0] |= this_secret_shares[0];
+      secrets[1] |= this_secret_shares[1];
+    }
+
+  }
+}
+
+
+int check_output_uniformity(const Circuit * circuit, BitDep** output_deps, GaussRand * gauss_rands){
+  DependencyList* deps    = circuit->deps;
+  int secret_count        = circuit->secret_count;
+  int random_count        = circuit->random_count + secret_count;
+  int bit_rand_len = 1 + (random_count / 64);
+  int mult_count          = deps->mult_deps->length;
+  int bit_mult_len = 1 + (mult_count / 64);
+
+  // Retrieving bitvector-based structures
+  BitDepVector** bit_deps  = deps->bit_deps;
+
+  for (int i = 0; i < circuit->share_count; i++) {
+    output_deps[i]->out = 1ULL << i;
+    BitDepVector* arr = bit_deps[deps->length - circuit->share_count + i];
+
+    // we don't iterate on arr to consider glitches and transitions yet
+    int j = 0;
+    output_deps[i]->secrets[0] = arr->content[j]->secrets[0];
+    output_deps[i]->secrets[1] = arr->content[j]->secrets[1];
+    for (int k = 0; k < bit_rand_len; k++){
+      output_deps[i]->randoms[k] = arr->content[j]->randoms[k];
+    } 
+    if(circuit->contains_mults){
+      for (int k = 0; k < bit_mult_len; k++){
+        output_deps[i]->mults[k] = arr->content[j]->mults[k];
+      }
+    } 
+
+  }
+
+  printf("Output Bit dependencies BEFORE reduction:\n");
+  for (int i = 0; i < circuit->share_count; i++) {
+    printf(" %3d: { ", i);
+    printf("  [ %u %u | ",
+              output_deps[i]->secrets[0], output_deps[i]->secrets[1]);
+    for (int k = 0; k < bit_rand_len; k++){
+      printf("%llu ", output_deps[i]->randoms[k]);
+    }
+    printf(" | "); 
+    if(circuit->contains_mults){
+      for (int k = 0; k < bit_mult_len; k++){
+        printf("%llu ", output_deps[i]->mults[k]);
+      }
+    } 
+    printf("| %u ", output_deps[i]->out); 
+    printf("]");
+    printf(" -- gauss_rand = %llu", gauss_rands[i].mask);
+    printf(" }\n");
+  }
+  printf("\n\n");
+
+  for(int i=0; i< circuit->share_count; i++){
+    gauss_step(output_deps[i], output_deps, gauss_rands, bit_rand_len, bit_mult_len, i);
+    set_gauss_rand(output_deps, gauss_rands, i, bit_rand_len);
+  }
+
+  printf("Output Bit dependencies AFTER reduction:\n");
+  for (int i = 0; i < circuit->share_count; i++) {
+    printf(" %3d: { ", i);
+    printf("  [ %u %u | ",
+              output_deps[i]->secrets[0], output_deps[i]->secrets[1]);
+    for (int k = 0; k < bit_rand_len; k++){
+      printf("%llu ", output_deps[i]->randoms[k]);
+    }
+    printf(" | "); 
+    if(circuit->contains_mults){
+      for (int k = 0; k < bit_mult_len; k++){
+        printf("%llu ", output_deps[i]->mults[k]);
+      }
+    } 
+    printf("| %u ", output_deps[i]->out); 
+    printf("]");
+    printf(" -- gauss_rand = %llu", gauss_rands[i].mask);
+    printf(" }\n");
+  }
+  printf("\n\n");
+
+  Dependency secrets[circuit->share_count][2];
+  uint64_t t = (1 << circuit->share_count)-1;
+  for (int i = 0; i < circuit->share_count-1; i++) {
+    compute_input_secrets(circuit, output_deps[i], secrets[i], mult_count, false);
+    bool all_zero = true;
+    for (int k = 0; k < bit_rand_len; k++){
+      if(output_deps[i]->randoms[k] != 0){
+        all_zero = false;
+      }
+      if(all_zero){
+        return 1;
+      }
+    }
+    if(output_deps[i]->out == t){
+      return 1;
+    }
+  }
+
+  compute_input_secrets(circuit, output_deps[circuit->share_count-1], secrets[circuit->share_count-1], mult_count, false);
+  if(secrets[circuit->share_count-1][0] != t){
+    return 1;
+  }
+  if((secret_count == 2) && (secrets[circuit->share_count-1][1] != t)){
+    return 1;
+  }
+  for (int k = 0; k < bit_rand_len; k++){
+    if(output_deps[circuit->share_count-1]->randoms[k] != 0){
+      return 1;
+    }
+  }
+  if(output_deps[circuit->share_count-1]->out != t){
+    return 1;
+  }
+
+  return 0;
+
+}
+
+
+static int fail_to_choose_set_I_freeSNI_IOS(const Circuit* circuit,
+                      int comb_len,
+                      BitDep** local_deps,
+                      int local_deps_len,
+                      int local_deps_len_tmp,
+                      GaussRand* gauss_rands,
+                      Dependency ** secrets,
+                      Dependency ** secrets_xor,
+                      Dependency* choices,
+                      Dependency* final_inputs,
+                      Dependency* final_output,
+                      bool freesni,
+                      bool ios,
+                      int * total_iterations,
+                      int * total_tuples){
+
+  int mult_count          = circuit->deps->mult_deps->length;
+  uint64_t t = (1 << circuit->share_count)-1;
+
+  ////////////////////////////////////////////////////////////////////
+  // Next, try to construct the set O of output shares independent
+  // and uniform conditioned on the probes simulated by I,J , and 
+  // c_{|I \inter J}
+  ////////////////////////////////////////////////////////////////////
+  int index_choices = 0;
+  for(int i = local_deps_len_tmp; i< local_deps_len; i++){
+    if(gauss_rands[i].is_set) continue;
+
+    if(local_deps[i]->out == 0){
+      compute_input_secrets(circuit, local_deps[i], secrets[i], mult_count, false);
+      final_inputs[0] = final_inputs[0] | secrets[i][0];
+      final_inputs[1] = final_inputs[1] | secrets[i][1];
+      //continue;
+    }
+    else{
+      // free SNI
+      if(freesni){
+        compute_input_secrets(circuit, local_deps[i], secrets[i], mult_count, false);
+        compute_input_secrets(circuit, local_deps[i], secrets_xor[i], mult_count, true);
+        if((hamming_weight(secrets[i][0] | local_deps[i]->out) > comb_len) ||
+            (hamming_weight(secrets[i][1] | local_deps[i]->out) > comb_len)){
+      
+          final_inputs[0] = final_inputs[0] | (secrets_xor[i][0]) | (local_deps[i]->out ^ t);
+          final_inputs[1] = final_inputs[1] | (secrets_xor[i][1]) | (local_deps[i]->out ^ t);
+        }
+        else if((hamming_weight((secrets_xor[i][0]) | (local_deps[i]->out ^ t)) <= comb_len) &&
+                (hamming_weight((secrets_xor[i][1]) | (local_deps[i]->out ^ t)) <= comb_len)){
+          choices[index_choices] = i;
+          index_choices++;
+        } 
+        else{
+          final_inputs[0] = final_inputs[0] | secrets[i][0] | local_deps[i]->out;
+          final_inputs[1] = final_inputs[1] | secrets[i][1] | local_deps[i]->out;
+        }
+
+      }
+
+      // IOS
+      else if(ios){
+        compute_input_secrets(circuit, local_deps[i], secrets[i], mult_count, false);
+        compute_input_secrets(circuit, local_deps[i], secrets_xor[i], mult_count, true);
+        
+        if((hamming_weight(secrets[i][0]) > comb_len) || (hamming_weight(local_deps[i]->out) > comb_len) ||
+            (hamming_weight(secrets[i][1]) > comb_len)){
+      
+          final_inputs[0] = final_inputs[0] | (secrets_xor[i][0]);
+          final_inputs[1] = final_inputs[1] | (secrets_xor[i][1]);
+          final_output[0] = final_output[0] | (local_deps[i]->out ^ t);
+
+        }
+        else if((hamming_weight(secrets_xor[i][0]) <= comb_len) && (hamming_weight(local_deps[i]->out ^ t) <= comb_len) &&
+                (hamming_weight(secrets_xor[i][1]) <= comb_len)){
+          choices[index_choices] = i;
+          index_choices++;
+        } 
+        else{
+          final_inputs[0] = final_inputs[0] | secrets[i][0];
+          final_inputs[1] = final_inputs[1] | secrets[i][1];
+          final_output[0] = final_output[0] | local_deps[i]->out;
+        }
+      }
+      
+    } 
+  }
+
+  ////////////////////////////////////////////////////////////////////
+  // Try to complete sets of input shares that will satisfy
+  // the property
+  ////////////////////////////////////////////////////////////////////
+  if(index_choices > 0){
+    //printf("After: final_inputs = %lu, %lu\n", final_inputs[0], final_inputs[1]);
+    (*total_tuples)++;
+    bool fail = true;
+    Dependency final_inputs_tmp[2] = {final_inputs[0], final_inputs[1]};
+    Dependency final_output_tmp = final_output[0];
+
+    for(uint64_t i = 0; i < (1ULL << index_choices); i++){
+      (*total_iterations)++;
+      final_inputs_tmp[0] = final_inputs[0];
+      final_inputs_tmp[1] = final_inputs[1];
+      final_output_tmp = final_output[0];
+
+      for(int j = 0; j< index_choices; j++){
+        if(freesni){
+          if(((1ULL << j) & i)){
+            final_inputs_tmp[0] = final_inputs_tmp[0] | (secrets_xor[choices[j]][0]) | (local_deps[choices[j]]->out ^t);
+            final_inputs_tmp[1] = final_inputs_tmp[1] | (secrets_xor[choices[j]][1]) | (local_deps[choices[j]]->out ^t);
+          }
+          else{
+            final_inputs_tmp[0] = final_inputs_tmp[0] | secrets[choices[j]][0] | local_deps[choices[j]]->out;
+            final_inputs_tmp[1] = final_inputs_tmp[1] | secrets[choices[j]][1] | local_deps[choices[j]]->out;
+          }
+        }
+        else if(ios){
+          if(((1ULL << j) & i)){
+            final_inputs_tmp[0] = final_inputs_tmp[0] | (secrets_xor[choices[j]][0]);
+            final_inputs_tmp[1] = final_inputs_tmp[1] | (secrets_xor[choices[j]][1]);
+            final_output_tmp = final_output_tmp | (local_deps[choices[j]]->out ^t);
+          }
+          else{
+            final_inputs_tmp[0] = final_inputs_tmp[0] | secrets[choices[j]][0];
+            final_inputs_tmp[1] = final_inputs_tmp[1] | secrets[choices[j]][1];
+            final_output_tmp = final_output_tmp | local_deps[choices[j]]->out;
+          }
+        }
+      }
+      if((hamming_weight(final_inputs_tmp[0]) <= comb_len) && 
+          (hamming_weight(final_inputs_tmp[1]) <= comb_len) &&
+          (hamming_weight(final_output_tmp) <= comb_len)){
+        fail = false;
+        break;
+      }
+    }
+    if(fail){
+      final_inputs[0] = final_inputs_tmp[0];
+      final_inputs[1] = final_inputs_tmp[1];
+      return 1;
+    }
+    else{
+      return 0;
+    }
+  }
+  else{
+    if((hamming_weight(final_inputs[0]) > comb_len) ||
+        (hamming_weight(final_inputs[1]) > comb_len) ||
+        (hamming_weight(final_output[0]) > comb_len)){
+      return 1;
+    }
+    else{
+      return 0;
+    }
+  } 
+
+}
+
+
+// Checks if the tuple |local_deps| is a failure when adding randoms
+// (that were removed from the circuit by the function
+// |remove_randoms| of dimensions.c).
+static int is_failure_with_randoms_freeSNI_IOS(const Circuit* circuit,
+                      int comb_len,
+                      int comb_free_space,
+                      BitDep** local_deps,
+                      int local_deps_len,
+                      BitDep** local_deps_copy, 
+                      GaussRand* gauss_rands_copy,
+                      Dependency ** secrets,
+                      Dependency ** secrets_xor,
+                      Dependency* choices,
+                      Dependency* final_inputs,
+                      Dependency* final_output,
+                      bool freesni,
+                      bool ios,
+                      int * total_iterations,
+                      int * total_tuples) {
+  if (comb_free_space == 0) return 0;
+
+  DependencyList* deps = circuit->deps;
+  int secret_count = circuit->secret_count;
+  int random_count = circuit->random_count + secret_count;
+  int deps_size = deps->deps_size;
+  int mult_count = deps->mult_deps->length;
+  int non_mult_deps_count = deps_size - mult_count;
+  int bit_rand_len = 1 + random_count / 64;
+  int bit_mult_len = 1 + mult_count / 64;
+
+  // Collecting all randoms of |local_deps| in the binary array |randoms|.
+  uint64_t randoms[bit_rand_len];
+  memset(randoms, 0, bit_rand_len * sizeof(*randoms));
+  for (int i = 0; i < local_deps_len; i++) {
+    for (int j = 0; j < bit_rand_len; j++) {
+      randoms[j] |= local_deps[i]->randoms[j];
+    }
+  }
+
+  // Building the array |randoms_arr| that contains the index of the
+  // randoms in |local_deps|.
+  Var randoms_arr[non_mult_deps_count];
+  int randoms_arr_len = 0;
+  for (int i = 0; i < bit_rand_len; i++) {
+    uint64_t rand_elem = randoms[i];
+    while (rand_elem != 0) {
+      int rand_idx_in_elem = 63-__builtin_ia32_lzcnt_u64(rand_elem);
+      rand_elem &= ~(1ULL << rand_idx_in_elem);
+      randoms_arr[randoms_arr_len++] = rand_idx_in_elem + i*64;
+    }
+  }
+
+  int copy_size = 0;
+
+  // Generating all combinations of randoms of |randoms_arr| and
+  // checking if they make the tuple become a failure.
+  Comb randoms_comb[randoms_arr_len];
+  for (int size = 1; size <= comb_free_space && size <= randoms_arr_len; size++) {
+    for (int i = 0; i < size; i++) randoms_comb[i] = i;
+    do {
+
+      Comb real_comb[size];
+      for (int i = 0; i < size; i++) real_comb[i] = randoms_arr[randoms_comb[i]];
+      uint64_t selected_randoms[bit_rand_len];
+      memset(selected_randoms, 0, bit_rand_len * sizeof(*selected_randoms));
+
+
+      for (int i = 0; i < size; i++) {
+        int idx    = real_comb[i] / 64;
+        selected_randoms[idx] |= 1ULL << real_comb[i];
+      }
+
+      copy_size = 0;
+
+      // Computing which secret shares are leaked
+      for (int i = 0; i < local_deps_len; i++) {
+        memcpy(local_deps_copy[copy_size], local_deps[i], sizeof(*local_deps[i]));
+        for (int j = 0; j < bit_rand_len; j++) {
+          local_deps_copy[copy_size]->randoms[j] = (local_deps[i]->randoms[j] & selected_randoms[j]) ^ local_deps[i]->randoms[j];
+        }
+        copy_size ++;
+      }
+
+      for (int i = 0; i < copy_size; i++) {
+          gauss_step(local_deps_copy[i], local_deps_copy, gauss_rands_copy,
+                    bit_rand_len, bit_mult_len, i);
+          set_gauss_rand(local_deps_copy, gauss_rands_copy, i, bit_rand_len);
+      }
+
+      final_inputs[0] = 0; final_inputs[1] = 0;
+      final_output[0] = 0;
+
+      if(fail_to_choose_set_I_freeSNI_IOS(
+        circuit, comb_len+size, local_deps_copy, local_deps_len,
+        0, gauss_rands_copy, secrets, secrets_xor, choices, 
+        final_inputs, final_output, freesni, ios, total_iterations, total_tuples)){
+
+          return 1;
+      }
+
+    } while (incr_comb_in_place(randoms_comb, size, randoms_arr_len));
+  }
+
+  return 0;
+}
+
+
+
+
+int _verify_tuples_freeSNI_IOS(const Circuit* circuit, // The circuit
+                   int comb_len, // The length of the tuples (includes prefix->length)
+                   int comb_free_space,
+                   const DimRedData* dim_red_data, // Data to generate the actual tuples
+                                                   // after the dimension reduction
+                   bool has_random,  // Should be false if randoms have been removed
+                   bool stop_at_first_failure, // If true, stops after the first failure
+                   BitDep** output_deps,
+                   GaussRand * output_gauss_rands,
+                   void (failure_callback)(const Circuit*,Comb*, int, SecretDep*, void*),
+                   //    ^^^^^^^^^^^^^^^^
+                   // The function to call when a failure is found
+                   void* data, // additional data to pass to |failure_callback|
+                   bool freesni,
+                   bool ios
+                   ) {
+
+  DependencyList* deps    = circuit->deps;
+  // Retrieving bitvector-based structures
+  BitDepVector** bit_deps  = deps->bit_deps;
+
+  int secret_count        = circuit->secret_count;
+  int random_count        = circuit->random_count + secret_count;
+  int mult_count          = deps->mult_deps->length;
+  int bit_mult_len = 1 + (mult_count / 64);
+  int bit_rand_len = 1 + (random_count / 64);
+  int last_var = circuit->length;
+
+  //VarVector* prefix = &empty_VarVector;
+
+
+  // Local dependencies
+  int local_deps_max_size = deps->length * 10; // sounds reasonable?
+
+  // to test independence of output shares
+  GaussRand gauss_rands[local_deps_max_size];  
+  GaussRand gauss_rands_copy[local_deps_max_size];  
+  BitDep* local_deps[local_deps_max_size];
+  BitDep* local_deps_copy[local_deps_max_size];
+
+  // to determine the sets of input shares to simulate the t_1 + t_2 probes
+  GaussRand gauss_rands_without_outs[local_deps_max_size];
+
+  BitDep* local_deps_without_outs[local_deps_max_size];
+
+  Dependency choices[local_deps_max_size];
+  Dependency* secrets[local_deps_max_size];
+  Dependency* secrets_xor[local_deps_max_size];
+  choices[0] = -1;
+
+
+  for(int i=0; i<local_deps_max_size; i++){
+    local_deps[i] = alloca(sizeof(**local_deps));
+    local_deps_copy[i] = alloca(sizeof(**local_deps_copy));
+
+    local_deps_without_outs[i] = alloca(sizeof(**local_deps_without_outs));
+    secrets[i] = alloca(sizeof(**secrets));
+    secrets_xor[i] = alloca(sizeof(**secrets_xor));
+
+    secrets[i][0] = 0;
+    secrets[i][1] = 0;
+    secrets_xor[i][0] = 0;
+    secrets_xor[i][1] = 0;
+  }
+
+  int failure_count = 0;
+  uint64_t tuples_checked = 0;
+
+  int local_deps_without_outs_len = 0;
+  int local_deps_without_len_tmp  = 0;
+
+  ////////////////////////////////////////////////////////////////////
+  // Copy the already reduced n-1 output shares passed to the function
+  // to avoid doing row reduction on them at each iteration
+  // this is used with |local_deps|
+  ////////////////////////////////////////////////////////////////////
+  int local_deps_len = 0;
+  int local_deps_len_tmp;
+
+  for(int i=0; i< (circuit->share_count)-1; i++){
+    memcpy(local_deps[i], output_deps[i], sizeof(*output_deps[i]));
+    memcpy(gauss_rands+i, output_gauss_rands+i, sizeof(gauss_rands[i]));
+
+    local_deps_len++;
+  }
+  local_deps_len_tmp = local_deps_len;
+
+  // Start iterating on the sets of probes
+  Comb* curr_comb = init_comb(NULL, comb_len, &empty_VarVector, comb_len);
+  
+  int total_iterations = 0;
+  int total_tuples = 0;
+  Dependency final_inputs[2];
+  Dependency final_output[1] = {0}; // only for IOS
+  int first_invalid_local_deps_index = 0;
+
+  do {
+    tuples_checked++;
+    
+    local_deps_len = local_deps_len_tmp + first_invalid_local_deps_index;
+    local_deps_without_outs_len = local_deps_without_len_tmp + first_invalid_local_deps_index;
+
+    ////////////////////////////////////////////////////////////////////
+    // Updating |local_deps| and |local_deps_without_outs|
+    // with INTERNAL DEPS
+    ////////////////////////////////////////////////////////////////////
+    for (int i = first_invalid_local_deps_index; i < comb_len; i++) {
+      BitDepVector* bit_dep_arr = bit_deps[curr_comb[i]];
+
+      for (int dep_idx = 0; dep_idx < bit_dep_arr->length; dep_idx++) {
+
+        gauss_step(bit_dep_arr->content[dep_idx], local_deps, gauss_rands,
+                   bit_rand_len, bit_mult_len, local_deps_len);
+        set_gauss_rand(local_deps, gauss_rands, local_deps_len, bit_rand_len);
+
+        //without outs
+        gauss_step(bit_dep_arr->content[dep_idx], local_deps_without_outs, gauss_rands_without_outs,
+                   bit_rand_len, bit_mult_len, local_deps_without_outs_len);
+        set_gauss_rand(local_deps_without_outs, gauss_rands_without_outs, local_deps_without_outs_len, bit_rand_len);
+
+
+        local_deps_len++;
+        local_deps_without_outs_len++;
+
+      }
+
+    }
+
+    ////////////////////////////////////////////////////////////////////
+    // determining the sets of input shares to simulate the
+    // probes -> SNI like verification
+    ////////////////////////////////////////////////////////////////////
+    final_inputs[0] = 0; final_inputs[1] = 0; final_output[0] = 0;
+    for(int i = 0; i < local_deps_without_outs_len; i++){
+      if(gauss_rands_without_outs[i].is_set) continue;
+
+      compute_input_secrets(circuit, local_deps_without_outs[i], secrets[i], mult_count, false);
+      final_inputs[0] = final_inputs[0] | secrets[i][0];
+      final_inputs[1] = final_inputs[1] | secrets[i][1];
+    }
+
+    if((hamming_weight(final_inputs[0]) > comb_len) ||
+       (((secret_count==2) && (hamming_weight(final_inputs[1]) > comb_len)))){
+        
+        printf("SNI-like Failure\n");
+        goto process_failure;
+    }
+
+    // bool pr = false;
+    // if(curr_comb[0] == 8 && curr_comb[1] == 14){
+    //   pr = true;
+    //   printf("After Gauss: {\n");
+    //   for (int i = 0; i < local_deps_len; i++) {
+    //     printf("  [ %lu %lu | ",
+    //               local_deps[i]->secrets[0], local_deps[i]->secrets[1]);
+    //     for (int k = 0; k < bit_rand_len; k++){
+    //       printf("%llu ", local_deps[i]->randoms[k]);
+    //     }
+    //     printf(" | "); 
+    //     if(circuit->contains_mults){
+    //       for (int k = 0; k < bit_mult_len; k++){
+    //         printf("%llu ", local_deps[i]->mults[k]);
+    //       }
+    //     } 
+    //     printf("| %u ", local_deps[i]->out); 
+    //     printf("] -- gauss_rand = %llu\n", gauss_rands[i].mask);
+      
+    //   }
+    //   printf("\n");
+    // }
+
+
+    if(fail_to_choose_set_I_freeSNI_IOS(
+          circuit, comb_len, local_deps, local_deps_len, local_deps_len_tmp, gauss_rands, secrets, secrets_xor, choices, final_inputs,
+          final_output, freesni, ios, &total_iterations, &total_tuples
+        )
+    ){
+      goto process_failure;
+    }
+    else if(!has_random &&
+            is_failure_with_randoms_freeSNI_IOS(circuit, comb_len, comb_free_space, local_deps,
+                                                local_deps_len, local_deps_copy, gauss_rands_copy,
+                                                secrets, secrets_xor, choices, final_inputs, final_output, freesni,
+                                                ios, &total_iterations, &total_tuples
+                                              )){
+
+        goto process_failure;
+
+    }
+    else{
+      goto process_success;
+    }
+
+    ////////////////////////////////////////////////////////////////////
+    // Tuple is a failure
+    ////////////////////////////////////////////////////////////////////
+    process_failure:
+    if (failure_callback) {
+      SecretDep leaky_inputs[2] = { 0 };
+      Dependency secret_deps[2] = { 0 };
+      if (!has_random) {
+        printf("A failure was found. Some randoms might be missing from the tuple you get.\n");
+        failure_callback(circuit, curr_comb, comb_len, leaky_inputs, data);
+      }
+      else{
+          if (dim_red_data) {
+          expand_tuple_to_failure(circuit, -1, 0,
+                                  curr_comb, comb_len, leaky_inputs, secret_deps,
+                                  comb_len, dim_red_data, failure_callback, data);
+          // if((!freesni) && (!ios)){
+          //   expand_tuple_to_failure(circuit, -1, 0,
+          //                           prefix->content, prefix->length, leaky_inputs, secret_deps,
+          //                           prefix->length, dim_red_data, failure_callback, data);
+          // }
+        } else {
+          failure_callback(circuit, curr_comb, comb_len, leaky_inputs, data);
+        }
+      }
+    }
+    failure_count++;
+    if (stop_at_first_failure) {
+      break;
+    }
+
+    ////////////////////////////////////////////////////////////////////
+    // Tuple is not a failure, move on to the next tuple to check
+    ////////////////////////////////////////////////////////////////////
+    process_success:;
+  } while ((first_invalid_local_deps_index = next_comb(curr_comb, comb_len, last_var, NULL)) >= 0);
+
+  if(failure_count == 0){
+     printf("Total tuples with additional iterations = %d\n", total_tuples);
+     printf("Total additional iterations = %d\n", total_iterations);
+     printf("Iterations per tuple =  %lf\n\n", (total_iterations * 1.0)/total_tuples);
+  }
+
+  return failure_count;
+}
+
+

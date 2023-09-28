@@ -23,6 +23,7 @@ typedef struct _bitDep {
   Dependency secrets[2];
   uint64_t randoms[RANDOMS_MAX_LEN];
   uint64_t mults[BITMULT_MAX_LEN];
+  Dependency out;
 } BitDep;
 
 

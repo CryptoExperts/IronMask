@@ -15,6 +15,8 @@
 #include "coeffs.h"
 #include "NI.h"
 #include "SNI.h"
+#include "freeSNI.h"
+#include "IOS.h"
 #include "PINI.h"
 #include "RP.h"
 #include "RPC.h"
@@ -40,7 +42,7 @@ int is_int(char* s) {
 
 void usage() {
   printf("Usage:\n"
-         "    ironmask [OPTIONS] [NI|SNI|PINI|RP|RPC|RPE] FILE\n"
+         "    ironmask [OPTIONS] [NI|SNI|freeSNI|uniformSNI|IOS|PINI|RP|RPC|RPE] FILE\n"
          "Computes the probing (NI, SNI, PINI) or random probing property (RP, RPC, RPE) for FILE\n\n"
 
          "Options:\n"
@@ -157,6 +159,8 @@ int main(int argc, char** argv) {
     if ((strcmp(argv[optind], "constr")   == 0) ||
         (strcmp(argv[optind], "NI")   == 0) ||
         (strcmp(argv[optind], "SNI")  == 0) ||
+        (strcmp(argv[optind], "freeSNI")  == 0) ||
+        (strcmp(argv[optind], "IOS")  == 0) ||
         (strcmp(argv[optind], "PINI") == 0) ||
         (strcmp(argv[optind], "RP")   == 0) ||
         (strcmp(argv[optind], "RPC")  == 0) ||
@@ -191,6 +195,8 @@ int main(int argc, char** argv) {
 
   if (((strcmp(property, "NI")   == 0) ||
        (strcmp(property, "SNI")  == 0) ||
+       (strcmp(property, "freeSNI")  == 0) ||
+       (strcmp(property, "IOS")  == 0) ||
        (strcmp(property, "PINI") == 0) ||
        (strcmp(property, "RPC")  == 0) ||
        (strcmp(property, "RPE")  == 0)) &&
@@ -205,6 +211,7 @@ int main(int argc, char** argv) {
   }
 
   Circuit* circuit = parse_file(filename, glitch, transition);
+  //print_circuit(circuit);
 
   printf("Gadget with %d input(s),  %d output(s),  %d share(s)\n"
          "Total number of intermediate variables : %d\n"
@@ -234,6 +241,10 @@ int main(int argc, char** argv) {
     compute_SNI(circuit, cores, t);
   } else if (strcmp(property, "PINI") == 0) {
     compute_PINI(circuit, cores, t);
+  } else if (strcmp(property, "freeSNI") == 0) {
+    compute_freeSNI(circuit, cores, t);
+  } else if (strcmp(property, "IOS") == 0) {
+    compute_IOS(circuit, cores, t);
   } else if (strcmp(property, "RP") == 0) {
     compute_RP_coeffs(circuit, cores, coeff_max, opt_incompr);
   } else if (strcmp(property, "RPC") == 0) {
@@ -247,7 +258,7 @@ int main(int argc, char** argv) {
   time(&end);
   uint64_t diff_time = (uint64_t)difftime(end, start);
 
-  printf("\nVerification completed in %lu min %lu sec.\n",
+  printf("\nVerification completed in %llu min %llu sec.\n",
          diff_time / 60, diff_time % 60);
 
   free_circuit(circuit);

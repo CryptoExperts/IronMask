@@ -12,6 +12,13 @@
 #define hamming_weight(x) __builtin_popcount(x)
 #define make_t_in_from_mask(mask) (hamming_weight(mask) - 1)
 
+// This structure stores randoms used for the Gauss elimination.
+typedef struct _gauss_rand {
+  bool is_set;
+  int idx;
+  uint64_t mask;
+} GaussRand;
+
 /* void factorize_inner_mults(const Circuit* c, Dependency** factorized_deps, MultDependency* mult); */
 /* void factorize_mults(const Circuit* c, Dependency** local_deps, */
 /*                      Dependency** deps1, Dependency** deps2, */
@@ -102,3 +109,39 @@ int _verify_tuples(const Circuit* circuit, // The circuit
                    // The function to call when a failure is found
                    void* data // additional data to pass to |failure_callback|
                    );
+
+
+int check_output_uniformity(const Circuit * circuit, BitDep** output_deps, GaussRand * gauss_rands);
+
+int find_first_failure_freeSNI_IOS(const Circuit* c,             // The circuit
+                       int cores,                    // How many threads to use
+                       int comb_len,                 // The length of the tuples
+                       int comb_free_space,
+                       const DimRedData* dim_red_data, // Data to generate the actual tuples
+                                                       // after the dimension reduction
+                       bool has_random,  // Should be false if randoms have been removed
+                       BitDep** output_deps,
+                       GaussRand * output_gauss_rands,
+                       void (failure_callback)(const Circuit*,Comb*, int, SecretDep*, void* data),
+                       //     ^^^^^^^^^^^^^^^^
+                       // The function to call when a failure is found
+                       void* data, // additional data to pass to |failure_callback|
+                       bool freesni,
+                       bool ios);
+
+int _verify_tuples_freeSNI_IOS(const Circuit* circuit, // The circuit
+                   int comb_len, // The length of the tuples
+                   int comb_free_space,
+                   const DimRedData* dim_red_data, // Data to generate the actual tuples
+                                                   // after the dimension reduction
+                   bool has_random,  // Should be false if randoms have been removed
+                   bool stop_at_first_failure, // If true, stops after the first failure
+                   BitDep** output_deps,
+                   GaussRand * output_gauss_rands,
+                   void (failure_callback)(const Circuit*,Comb*, int, SecretDep*, void*),
+                   //    ^^^^^^^^^^^^^^^^
+                   // The function to call when a failure is found
+                   void* data, // additional data to pass to |failure_callback|
+                   bool freesni,
+                   bool ios
+                  );

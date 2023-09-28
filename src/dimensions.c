@@ -638,7 +638,7 @@ void advanced_dimension_reduction(Circuit* circuit) {
   time(&end);
   uint64_t diff_time = (uint64_t)difftime(end, start);
 
-  printf("Advanced dimension reduction completed in %lu min %lu sec.\n",
+  printf("Advanced dimension reduction completed in %llu min %llu sec.\n",
          diff_time / 60, diff_time % 60);
   printf("old circuit: %d vars -- new circuit: %d vars.\n\n",
          deps->length, new_deps->length);
@@ -834,6 +834,8 @@ void remove_randoms(Circuit* circuit) {
 
   printf("Randoms removed. old circuit: %d vars -- new circuit: %d vars.\n\n",
          deps->length, new_deps->length);
+
+  print_circuit(circuit);
 }
 
 

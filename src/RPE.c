@@ -402,21 +402,21 @@ uint64_t** compute_RPE1(Circuit* circuit, DimRedData* dim_red_data,
 
   printf("REP1- I1_or_I2: [ ");
   for (int i = 0; i < circuit->total_wires; i++)
-    printf("%lu, ", coeffs[I1_or_I2][i]);
+    printf("%llu, ", coeffs[I1_or_I2][i]);
   printf("]\n");
 
   if (coeffs_count > 1) {
     printf("REP1- I1: [ ");
     for (int i = 0; i < circuit->total_wires; i++)
-      printf("%lu, ", coeffs[I1][i]);
+      printf("%llu, ", coeffs[I1][i]);
     printf("]\n");
     printf("REP1- I2: [ ");
     for (int i = 0; i < circuit->total_wires; i++)
-      printf("%lu, ", coeffs[I2][i]);
+      printf("%llu, ", coeffs[I2][i]);
     printf("]\n");
     printf("REP1- I1_and_I2: [ ");
     for (int i = 0; i < circuit->total_wires; i++)
-      printf("%lu, ", coeffs[I1_and_I2][i]);
+      printf("%llu, ", coeffs[I1_and_I2][i]);
     printf("]\n");
   }
   printf("\n");
@@ -726,11 +726,11 @@ uint64_t** compute_RPE2(Circuit* circuit, DimRedData* dim_red_data,
 
       for (uint64_t current_comb_idx = 0; current_comb_idx < total_combs;
            current_comb_idx += BATCH_SIZE) {
-        printf("  + current_comb_idx = %lu / %lu\n", current_comb_idx, total_combs);
+        printf("  + current_comb_idx = %llu / %llu\n", current_comb_idx, total_combs);
         Comb* current_comb = unrank(circuit->length, size, current_comb_idx);
 
         for (unsigned int i = 0; i < out_comb_len; i++) {
-          printf("    - i = %d / %lu\n", i, out_comb_len);
+          printf("    - i = %d / %llu\n", i, out_comb_len);
           verif_prefix.content = out_comb_arr[i];
           data.count = i;
 
@@ -777,21 +777,21 @@ uint64_t** compute_RPE2(Circuit* circuit, DimRedData* dim_red_data,
 
   printf("REP2- I1_or_I2: [ ");
   for (int i = 0; i < circuit->total_wires; i++)
-    printf("%lu, ", coeffs[I1_or_I2][i]);
+    printf("%llu, ", coeffs[I1_or_I2][i]);
   printf("]\n");
 
   if (coeffs_count > 1) {
     printf("REP2- I1: [ ");
     for (int i = 0; i < circuit->total_wires; i++)
-      printf("%lu, ", coeffs[I1][i]);
+      printf("%llu, ", coeffs[I1][i]);
     printf("]\n");
     printf("REP2- I2: [ ");
     for (int i = 0; i < circuit->total_wires; i++)
-      printf("%lu, ", coeffs[I2][i]);
+      printf("%llu, ", coeffs[I2][i]);
     printf("]\n");
     printf("REP2- I1_and_I2: [ ");
     for (int i = 0; i < circuit->total_wires; i++)
-      printf("%lu, ", coeffs[I1_and_I2][i]);
+      printf("%llu, ", coeffs[I1_and_I2][i]);
     printf("]\n");
   }
   printf("\n");
@@ -913,7 +913,7 @@ uint64_t** compute_RPE_copy(Circuit* circuit, DimRedData* dim_red_data,
 
   printf("REP%d%d- I1_or_I2: [ ", first_output ? 1 : 2, first_output ? 2 : 1);
   for (int i = 0; i < circuit->total_wires; i++)
-    printf("%lu, ", coeffs[0][i]);
+    printf("%llu, ", coeffs[0][i]);
   printf("]\n\n");
 
   for (unsigned i = 0; i < out_comb_len_1; i++) {

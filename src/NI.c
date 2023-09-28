@@ -82,7 +82,7 @@ int compute_NI(Circuit* circuit, int cores, int t) {
 
   int has_failure = 0;
   for (int size = 0; size <= t; size++) {
-    printf("Checking NI ==> %'lu tuples of size %d to check...\n",
+    printf("Checking NI ==> %'llu tuples of size %d to check...\n",
            n_choose_k(size, circuit->deps->length), size);
     has_failure = find_first_failure(circuit,
                                      cores,

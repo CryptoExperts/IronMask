@@ -98,14 +98,14 @@ void compute_SNI(Circuit* circuit, int cores, int t) {
 
   bool has_random = true;
   if (!circuit->has_input_rands) {
-    has_random = false;
-    remove_randoms(circuit);
+     has_random = false;
+     remove_randoms(circuit);
   }
 
   struct callback_data data = { .sni_order = t };
 
   // Checking for out_size = 0 (basically like checking NI but excluding outputs)
-  fprintf(stderr, "Checking SNI: out_size = 0 ==> %'lu tuples...\n",
+  fprintf(stderr, "Checking SNI: out_size = 0 ==> %'llu tuples...\n",
           n_choose_k(t, circuit->length));
   for (int comb_len = 0; comb_len <= t; comb_len++) {
     if (find_first_failure(circuit,
@@ -134,7 +134,7 @@ void compute_SNI(Circuit* circuit, int cores, int t) {
     VarVector verif_prefix = { .length = out_size, .max_size = out_size, .content = NULL };
     int share_count_for_failure = t - out_size;
 
-    fprintf(stderr, "Checking SNI: out_size = %d ==> %'lu tuples...\n", out_size,
+    fprintf(stderr, "Checking SNI: out_size = %d ==> %'llu tuples...\n", out_size,
            out_comb_len * n_choose_k(t-out_size, circuit->length));
 
     for (unsigned int j = 0; j < out_comb_len; j++) {

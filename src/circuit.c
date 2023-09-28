@@ -222,6 +222,8 @@ void compute_bit_deps(Circuit* circuit) {
         }
       }
 
+      bit_dep->out = 0;
+
       BitDepVector_push(bit_deps[i], bit_dep);
     }
   }
@@ -280,11 +282,22 @@ void compute_bit_deps(Circuit* circuit) {
   }
 }
 
-
 void print_circuit(const Circuit* c) {
   DependencyList* deps = c->deps;
   int deps_size = deps->deps_size;
   MultDependencyList* mult_deps = deps->mult_deps;
+
+  printf("Circuit with %d variables\n", c->length);
+  printf("total_wires = %d\n", c->total_wires);
+  printf("secret_count = %d\n", c->secret_count);
+  printf("output_count = %d\n", c->output_count);
+  printf("random_count = %d\n", c->random_count);
+  printf("share_count = %d\n", c->share_count);
+  printf("all_shares_mask = %d\n", c->all_shares_mask);
+  printf("contains_mults = %d\n", c->contains_mults);
+  printf("has_input_rands = %d\n", c->has_input_rands);
+  printf("mult_count = %d\n", c->deps->mult_deps->length);
+  
 
   printf("Dependencies:\n");
   for (int i = 0; i < deps->length; i++) {
@@ -296,6 +309,11 @@ void print_circuit(const Circuit* c) {
       }
       printf(j == deps->deps[i]->length-1 ? "] " : "]\n");
     }
+
+      for (int k = 0; k < c->secret_count; k++) {
+        printf("%d ", deps->contained_secrets[i][k]);
+      }
+
     printf(" }  [%s]\n", deps->names[i]);
   }
 
