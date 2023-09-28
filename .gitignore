@@ -1,3 +1,4 @@
 ironmask
 *.o
 *~
+.DS_Store
