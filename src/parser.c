@@ -524,7 +524,7 @@ Circuit* gen_circuit(int shares, EqList* eqs,
                      bool glitch, bool transition) {
   Circuit* c = malloc(sizeof(*c));
 
-  int circuit_size = eqs->size;// - out->next_val;
+  int circuit_size = eqs->size;
   int mult_count = count_mults(eqs);
   int linear_deps_size = in->next_val + randoms->next_val;
   int deps_size = linear_deps_size + mult_count;
