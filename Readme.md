@@ -6,6 +6,8 @@ IronMask is a formal verification tool for the probaing and random probing secur
   + t-Non-Interference Security (NI)
   + t-Strong Non-Interference Security (SNI)
   + t-Probe Isolating Non-Interference (PINI)
+  + free-t-SNI (PINI)
+  + t-Input Output Separation (IOS)
   
 * Random probing security:
   + (p, &epsilon;)-Random Probing (RP)
