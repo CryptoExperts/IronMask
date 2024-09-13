@@ -4,4 +4,4 @@
 #include "dimensions.h"
 #include "utils.h"
 
-int compute_CNI(ParsedFile * pf, int cores, int t, int k);
+int compute_CNI(ParsedFile * pf, int cores, int t, int k, bool set);

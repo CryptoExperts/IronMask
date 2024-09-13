@@ -342,7 +342,7 @@ int main(int argc, char** argv) {
   } else if (strcmp(property, "RPE") == 0) {
     compute_RPE_coeffs(circuit, cores, coeff_max, t, t_output);
   } else if (strcmp(property, "CNI") == 0) {
-    compute_CNI(pf, cores, t, k);
+    compute_CNI(pf, cores, t, k, set);
   } else if (strcmp(property, "CRP") == 0) {
     if(pleak != -1 && pfault != -1){
       compute_CRP_val(pf, coeff_max, k, pleak, pfault, set);

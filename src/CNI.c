@@ -107,7 +107,7 @@ static void display_failure(const Circuit* c, Comb* comb, int comb_len, SecretDe
   printf("])\n\n");
 }
 
-int compute_CNI(ParsedFile * pf, int cores, int t, int k) {
+int compute_CNI(ParsedFile * pf, int cores, int t, int k, bool set) {
 
   // int length = 1;
   // char ** names = malloc(sizeof(*names));
@@ -144,7 +144,7 @@ int compute_CNI(ParsedFile * pf, int cores, int t, int k) {
 
       for(int j=0; j<i; j++){
         v[j] = malloc(sizeof(*v[j]));
-        v[j]->set = false;
+        v[j]->set = set;
         v[j]->name = names[comb[j]];
         v[j]->fault_on_input = false;
       }
