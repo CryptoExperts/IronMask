@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <assert.h>
+#include <inttypes.h>
 
 #include "NI.h"
 #include "config.h"
@@ -65,24 +66,31 @@ int compute_NI_constr(Circuit* circuit, int t) {
 int compute_NI(Circuit* circuit, int cores, int t) {
   //Var* unused;
   //refine_circuit(circuit, &unused);
+
   if (! circuit->contains_mults) {
     advanced_dimension_reduction(circuit);
     return compute_NI_constr(circuit, t);
   }
 
-  DimRedData* dim_red_data = remove_elementary_wires(circuit);
+  DimRedData* dim_red_data = remove_elementary_wires(circuit, true);
+
   advanced_dimension_reduction(circuit);
+
   bool has_random = true;
-  if (!circuit->has_input_rands) {
+  /*if (!circuit->has_input_rands) {
     has_random = false;
     remove_randoms(circuit);
-  }
+  }*/
+
+  //print_circuit(circuit);
+
+  printf("here\n");
 
   struct callback_data data = { .ni_order = t };
 
   int has_failure = 0;
   for (int size = 0; size <= t; size++) {
-    printf("Checking NI ==> %'llu tuples of size %d to check...\n",
+    printf("Checking NI ==> %" PRIu64 " tuples of size %d to check...\n",
            n_choose_k(size, circuit->deps->length), size);
     has_failure = find_first_failure(circuit,
                                      cores,
@@ -99,6 +107,7 @@ int compute_NI(Circuit* circuit, int cores, int t) {
                                      NULL,  // incompr_tuples
                                      display_failure,
                                      (void*)&data);
+    printf("finish\n");
     if (has_failure) break;
   }
 

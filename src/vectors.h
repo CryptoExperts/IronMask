@@ -40,6 +40,8 @@
   void _name##_shallow_free(_name* vec);                            \
 
 
+DEFINE_VECTOR_TYPE(StringVector, char *);
+
 DEFINE_VECTOR_TYPE(IntVector, int);
 
 DEFINE_VECTOR_TYPE(VarVector, Var);

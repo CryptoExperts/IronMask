@@ -27,8 +27,6 @@
 #include "vectors.h"
 
 typedef struct _dim_red_data {
-  int length; // Length of the |elementary_wires| array
-  VarVector** elementary_wires;
   int* new_to_old_mapping;
   VarVector* removed_wires;
   Circuit* old_circuit;
@@ -36,6 +34,6 @@ typedef struct _dim_red_data {
 
 
 void advanced_dimension_reduction(Circuit* circuit);
-DimRedData* remove_elementary_wires(Circuit* circuit);
+DimRedData* remove_elementary_wires(Circuit* circuit, bool print);
 void remove_randoms(Circuit* circuit);
 void free_dim_red_data(DimRedData* dim_red_data);

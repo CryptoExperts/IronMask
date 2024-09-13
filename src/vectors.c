@@ -67,6 +67,7 @@
     free(vec);                                                          \
   }                                                                     \
 
+DEFINE_VECTOR_IMPLEM(StringVector, char*);
 
 DEFINE_VECTOR_IMPLEM(IntVector, int);
 

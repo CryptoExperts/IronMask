@@ -1,8 +1,0 @@
-ORDER = 5
-MASKS = [r00, r01, r02, r03, r04, r05, r06, r07, r08, r09]
-s00 r00 s01 s10 r01 s02 s20 r06 s03 s30 r07
-s11 r01 s12 s21 r02 s13 s31 r07 s14 s41 r08
-s22 r02 s23 s32 r03 s24 s42 r08 s25 s52 r09
-s33 r03 s34 s43 r04 s35 s53 r09 r06
-s44 r04 s45 s54 r05 s40 s04
-s55 r05 s50 s05 r00 s51 s15

@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <assert.h>
+#include <inttypes.h>
 
 #include "NI.h"
 #include "SNI.h"
@@ -88,7 +89,7 @@ void compute_SNI_with_incompr(Circuit* circuit, int t) {
 
 
 void compute_SNI(Circuit* circuit, int cores, int t) {
-  DimRedData* dim_red_data = remove_elementary_wires(circuit);
+  DimRedData* dim_red_data = remove_elementary_wires(circuit, true);
   advanced_dimension_reduction(circuit);
 
   /* if (! circuit->contains_mults) { */
@@ -105,7 +106,7 @@ void compute_SNI(Circuit* circuit, int cores, int t) {
   struct callback_data data = { .sni_order = t };
 
   // Checking for out_size = 0 (basically like checking NI but excluding outputs)
-  fprintf(stderr, "Checking SNI: out_size = 0 ==> %'llu tuples...\n",
+  fprintf(stderr, "Checking SNI: out_size = 0 ==> %" PRIu64 " tuples...\n",
           n_choose_k(t, circuit->length));
   for (int comb_len = 0; comb_len <= t; comb_len++) {
     if (find_first_failure(circuit,
@@ -134,7 +135,7 @@ void compute_SNI(Circuit* circuit, int cores, int t) {
     VarVector verif_prefix = { .length = out_size, .max_size = out_size, .content = NULL };
     int share_count_for_failure = t - out_size;
 
-    fprintf(stderr, "Checking SNI: out_size = %d ==> %'llu tuples...\n", out_size,
+    fprintf(stderr, "Checking SNI: out_size = %d ==> %" PRIu64 " tuples...\n", out_size,
            out_comb_len * n_choose_k(t-out_size, circuit->length));
 
     for (unsigned int j = 0; j < out_comb_len; j++) {

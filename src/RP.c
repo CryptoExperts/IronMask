@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <assert.h>
 #include <math.h>
+#include <inttypes.h>
 
 #include "RP.h"
 #include "config.h"
@@ -43,7 +44,7 @@ void compute_RP_coeffs(Circuit* circuit, int cores, int coeff_max, int opt_incom
     coeffs[i] = 0;
   }
 
-  DimRedData* dim_red_data = remove_elementary_wires(circuit);
+  DimRedData* dim_red_data = remove_elementary_wires(circuit, true);
   int coeff_max_main_loop = coeff_max == -1 ? circuit->length :
     coeff_max > circuit->length ? circuit->length : coeff_max;
 
@@ -83,14 +84,14 @@ void compute_RP_coeffs(Circuit* circuit, int cores, int coeff_max, int opt_incom
     // only elementary shares (which, because of the dimension
     // reduction, are never generated otherwise).
     if (size > 0) {
-      printf("%llu, ", coeffs[size]); fflush(stdout);
+      printf("%"PRIu64", ", coeffs[size]); fflush(stdout);
     }
   }
 
-  for (int i = coeff_max_main_loop+1; i < dim_red_data->old_circuit->total_wires-1; i++) {
-    printf("%llu, ", coeffs[i]);
+  for (int i = coeff_max_main_loop+1; i < dim_red_data->old_circuit->total_wires; i++) {
+    printf("%"PRIu64", ", coeffs[i]);
   }
-  printf("%llu ]\n", coeffs[circuit->total_wires]);
+  printf("%"PRIu64" ]\n", coeffs[circuit->total_wires]);
 
   double p_min = compute_leakage_proba(coeffs, coeff_max,
                                        circuit->total_wires+1,
@@ -105,4 +106,7 @@ void compute_RP_coeffs(Circuit* circuit, int cores, int coeff_max, int opt_incom
   printf("pmax = %.10f -- log2(pmax) = %.10f\n", p_max, log2(p_max));
   printf("pmin = %.10f -- log2(pmin) = %.10f\n", p_min, log2(p_min));
   printf("\n");
+
+  get_failure_proba(coeffs, circuit->total_wires+1, 0.01, coeff_max_main_loop);
+  free_dim_red_data(dim_red_data);
 }

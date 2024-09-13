@@ -1,5 +1,11 @@
 #pragma once
 
 #include "circuit.h"
+#include "utils.h"
 
-Circuit* parse_file(char* filename, bool glitch, bool transition);
+ParsedFile * parse_file(char* filename);
+
+void free_parsed_file(ParsedFile * parsed);
+
+Circuit* gen_circuit(ParsedFile * pf, bool glitch, bool transition, Faults * fv);
+

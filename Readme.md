@@ -1,18 +1,37 @@
-# IronMask: Versatile Verification of Masking Security
+# IronMask and IronMask+
 
-IronMask is a formal verification tool for the probaing and random probing security of masked implementations. The verified properties are:
+IronMask is a formal verification tool for the probing and random probing security of masked implementations. Its design is described in ["IronMask: Versatile Verification of Masking Security"](https://eprint.iacr.org/2021/1671).
+The verified properties are:
 
 * Probing security:
-  + t-Non-Interference Security (NI)
-  + t-Strong Non-Interference Security (SNI)
-  + t-Probe Isolating Non-Interference (PINI)
-  + free-t-SNI (PINI)
-  + t-Input Output Separation (IOS)
+  + Non-Interference Security (NI)
+  + Strong Non-Interference Security (SNI)
+  + Probe Isolating Non-Interference (PINI)
+  + free-SNI (fSNI)
+  + Input Output Separation (IOS)
   
 * Random probing security:
-  + (p, &epsilon;)-Random Probing (RP)
-  + (t, p, &epsilon;)-Random Probing Composability (RPC)
-  + (t, f)-Random Probing Expandability (RPE)
+  + Random Probing (RP)
+  + Random Probing Composability (RPC)
+  + Random Probing Expandability (RPE)
+
+IronMask+ is an extension of IronMask able to analyze combined security against both faults and side-channel attcks. Its design is described in [Formal Definition and Verification for Combined Random Fault and Random Probing Security](https://eprint.iacr.org/2024/757).
+The additional verified properties are:
+* Combined fault and probing security
+    + Combined Non-Interference (CNI)
+        - t: maximum number of probes to consider in a tuple
+        - k: maximum number of faults to consider
+        - s: type of faults to consider (set:1, reset:0)
+* Combined random security:
+    + Known-Fault Random Combined Security (CRP)
+        - k: maximum number of faults to consider
+        - s: type of faults to consider (set:1, reset:0)
+        - c: bound on number of coefficients to compute 
+    + Known-Fault Random Combined Composability (CRPC)
+        - t: number of output shares to consider
+        - k: maximum number of faults to consider
+        - s: type of faults to consider (set:1, reset:0)
+        - c: bound on number of coefficients to compute 
 
 
 ## Installation
@@ -62,7 +81,7 @@ The parameter `coeff_max` specifies the maximum size of tuples to test during th
 
 #### Execution Examples
 
-* The following command executes P verification on the gadget `gadget.sage`, checking if it is 2​-NI using 4 cores:
+* The following command executes P verification on the gadget `gadget.sage`, checking if it is 2-NI using 4 cores:
 
   ```
   ironmask gadget.sage NI -t 2 -j 4
@@ -92,6 +111,29 @@ The parameter `coeff_max` specifies the maximum size of tuples to test during th
   ironmask gadget.sage RPC -c 5 -t 2 -v 2
   ```
 
+* For CRP and CRPC properties, the verification must be run as follows:
+
+1. Run the command 
+    ```
+    sage src/test_correction.py -p 'CRP/CRPC' -f gadget.sage -s 'fault_type (1 set, 0 reset)' -k 'nb_faults'
+    ```
+This command produces the faulty scenarios which cannot be corrected, necessary to compute the value of mu.
+
+2. Run IronMask with the appropriate values for t, k, s and c. The values for k and s must be the same chosen for the first command, for instance
+    ```
+    ./ironmask gadget.sage -k 'nb_faults' -s 'fault_type' -c 'nb_coeffs' -t 1
+    ```
+
+3. Run again IronMask with the same arguments as Step 2, with additional arguments: 
+    - -l to specify the desired leakage probability
+    - -f to specify the desired fault probability
+    For instance,
+    ```
+    ./ironmask gadget.sage -k 'nb_faults' -s 'fault_type' -c 'nb_coeffs' -t 1 -l 0,001 -f 0,001
+    ``` 
+    
+    This will output the final values for \mu and \epsilon
+
 ## Input Format
 
 Input gadget file have to be sage files in the following format :
@@ -102,7 +144,7 @@ Input gadget file have to be sage files in the following format :
 #RANDOMS r0
 #OUT d
 
-c0 = a0 * b0	
+c0 = a0 * b0    
 d0 = c0 + r0
 
 c1 = a1 * b1
@@ -114,17 +156,22 @@ tmp = a1 * b0
 d1 = c1 + tmp
 ```
 
-Above is an example of the ISW​ multiplication gadget with 2 shares. 
+Above is an example of the ISW multiplication gadget with 2 shares. 
 
 * `#SHARES 2` is the number of shares used in the gadget
 * `#IN a b` are the input variables of the gadget
 * `#RANDOMS r0` are all of the random variables used in the gadget
 * `#OUT d` is the output variable of the gadget
 
-The next lines are the instructions (or gates) of the gadget. Allowed operations are `+` and `*`. The shares of input/output variables range from 0 to #shares - 1 . To specify the share for each variable, simply use the variable name suffixed by the share number `(eg. a0, b1, d0, ...)​`.  Input variables should be one letter variables in an alphabetical order starting from `a` (`a, b, c, ...`). Output variables should also be one letter variables.
+The next lines are the instructions (or gates) of the gadget. Allowed operations are `+` and `*`. The shares of input/output variables range from 0 to #shares - 1 . To specify the share for each variable, simply use the variable name suffixed by the share number `(eg. a0, b1, d0, ...)`.  Input variables should be one letter variables in an alphabetical order starting from `a` (`a, b, c, ...`). Output variables should also be one letter variables.
 
 In the robust probing model, you can used the notation `![ ... ]` around an expression to stop the propagation of glitches. For instance, `c1 = ![ a1 * b1 ]`.
 
+For combined security, we add 
+```
+#DUPLICATIONS 3
+```
+in the header to indicate that all the input shares are duplicated three thimes. In this example, the shares `a0, a1, b0, b1` are then manipulated with their copies, namely we use `a0_0, a0_1, a0_2` instead of `a0`.
 
 ## Output Format
 
@@ -165,7 +212,6 @@ The file
 [`src/incompressible-tuples-generation.md`](src/incompressible-tuples-generation.md)
 presents our constructive algorithm to generate incompressible tuples,
 as well as some ideas and suggestions to improve its performance.
-
 
 ## License
 

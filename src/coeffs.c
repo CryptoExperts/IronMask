@@ -35,7 +35,7 @@ void compute_tree2(Array current_uple, uint64_t* coeffs, int nb_occ_tuple) {
     coeffs[nb_occ_tuple+1] += 1;
     return;
   }
-  int lst[nb_occ_tuple+1]; // TODO: is this large enough??
+  uint64_t lst[nb_occ_tuple+1]; // TODO: is this large enough??
   int nmin = 1;
   int nmax = current_uple.content[0];
   for (int i = 1; (unsigned long)i < current_uple.content[0] + 1; i++) {
@@ -213,12 +213,17 @@ double compute_leakage_proba(uint64_t* coeffs, int last_precise_coeff, int len,
 
     for (int i = 1; i < len; i++) {
       mpf_t tmp;
+      mpf_t tmp1;
       mpf_init_set_d(tmp, p);
+      mpf_init_set_d(tmp1, 1-p);
+      mpf_pow_ui(tmp1, tmp1, len-i-1);
       mpf_pow_ui(tmp, tmp, i);
       mpf_mul(tmp, tmp, coeffs_max[i]);
+      mpf_mul(tmp, tmp, tmp1);
       mpf_add(fp, fp, tmp);
 
       mpf_clear(tmp);
+      mpf_clear(tmp1);
     }
 
     if (square_root) {
@@ -240,4 +245,158 @@ double compute_leakage_proba(uint64_t* coeffs, int last_precise_coeff, int len,
   }
 
   return (p_inf+p_sup)/2;
+}
+
+void get_failure_proba(uint64_t* coeffs, int len, double p, int coeff_max){
+  mpf_t coeffs_max[len];
+
+  for (int i = 0; i < len; i++) {
+    mpf_init_set_ui(coeffs_max[i], coeffs[i]);
+  }
+
+  if(coeff_max != -1){
+    for (int i = coeff_max+1; i < len; i++) {
+      n_choose_k_gmp(i, len-1, coeffs_max[i]);
+    }
+  }
+
+  mpf_t fp;
+  mpf_init(fp);
+
+  for (int i = 1; i < len; i++) {
+    mpf_t tmp, tmp2;
+
+    mpf_init_set_d(tmp, p);
+    mpf_pow_ui(tmp, tmp, i);
+    
+    mpf_init_set_d(tmp2, 1.0-p);
+    mpf_pow_ui(tmp2, tmp2, len-i);
+
+    mpf_mul(tmp, tmp, coeffs_max[i]);
+    mpf_mul(tmp, tmp, tmp2);
+
+    mpf_add(fp, fp, tmp);
+
+    mpf_clear(tmp);
+  }
+
+  gmp_printf("f(%.2lf) = %.10Ff\n", p, fp);
+
+  mpf_clear(fp);
+}
+
+
+void compute_combined_intermediate_leakage_proba(uint64_t* coeffs, int k, int total, int coeffs_size, double p, double f, mpf_t res, int c_max){
+  mpf_t coeffs_mpf[coeffs_size];
+
+  if(c_max == -1){
+    for (int i = 0; i < coeffs_size; i++) {
+      mpf_init_set_ui(coeffs_mpf[i], coeffs[i]);
+    }
+  }
+  else{
+    for (int i = 0; i <= c_max; i++) {
+      mpf_init_set_ui(coeffs_mpf[i], coeffs[i]);
+    }
+    for (int i = c_max+1; i < coeffs_size; i++) {
+      n_choose_k_gmp(i, coeffs_size-1, coeffs_mpf[i]);
+      // if(i == coeffs_size - 1){
+      //   gmp_printf("%d, %.2Ff\n", i, coeffs_mpf[i]);
+      // }
+    }
+  }
+
+  mpf_t fp_tmp;
+  mpf_init(fp_tmp);
+
+  for (int i = 0; i < coeffs_size; i++) {
+
+    mpf_t tmp, tmp2;
+
+    mpf_init_set_d(tmp, p);
+    mpf_pow_ui(tmp, tmp, i);
+
+    mpf_init_set_d(tmp2, 1.0-p);
+    mpf_pow_ui(tmp2, tmp2, coeffs_size-i-1);
+
+    mpf_mul(tmp, tmp, coeffs_mpf[i]);
+    mpf_mul(tmp, tmp, tmp2);
+    
+    mpf_add(fp_tmp, fp_tmp, tmp);
+
+    mpf_clear(tmp);
+    mpf_clear(tmp2);
+  }
+
+  mpf_t tmp, tmp2;
+
+  mpf_init_set_d(tmp, f);
+  mpf_pow_ui(tmp, tmp, k);
+
+  mpf_init_set_d(tmp2, 1.0-f);
+  mpf_pow_ui(tmp2, tmp2, total-k);
+
+  mpf_mul(fp_tmp, fp_tmp, tmp);
+  mpf_mul(fp_tmp, fp_tmp, tmp2);
+
+  mpf_clear(tmp);
+  mpf_clear(tmp2);
+
+  mpf_add(res, res, fp_tmp);
+}
+
+
+void compute_combined_intermediate_mu(int k, int total, double f, mpf_t res){
+
+  mpf_t tmp, tmp2;
+
+  mpf_init_set_d(tmp, f);
+  mpf_pow_ui(tmp, tmp, k);
+
+  mpf_init_set_d(tmp2, 1.0-f);
+  mpf_pow_ui(tmp2, tmp2, total-k);
+
+  mpf_mul(tmp, tmp, tmp2);
+  mpf_add(res, res, tmp);
+
+  mpf_clear(tmp);
+  mpf_clear(tmp2);
+}
+
+void compute_combined_mu_max(int k, int total, double f, mpf_t res){
+  mpf_t tmp, tmp2, cf;
+
+  for(int i=k+1; i<= total;i++){
+
+    mpf_init(cf);
+    n_choose_k_gmp(i, total, cf);
+
+    mpf_init_set_d(tmp, f);
+    mpf_pow_ui(tmp, tmp, i);
+
+    mpf_init_set_d(tmp2, 1.0-f);
+    mpf_pow_ui(tmp2, tmp2, total-i);
+
+    mpf_mul(tmp, tmp, tmp2);
+    mpf_mul(tmp, tmp, cf);
+    mpf_add(res, res, tmp);
+
+    mpf_clear(cf);
+    mpf_clear(tmp);
+    mpf_clear(tmp2);
+  }
+}
+
+void compute_combined_final_proba(mpf_t epsilon, mpf_t mu){
+  mpf_t tmp;
+
+  // compute 1 / (1-mu)
+  mpf_init_set_d(tmp, 1);
+  mpf_sub (tmp, tmp, mu);
+  mpf_ui_div(tmp, 1, tmp);
+
+  mpf_mul(epsilon, epsilon, tmp);
+
+  mpf_clear(tmp);
+
 }
