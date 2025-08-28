@@ -1,0 +1,17 @@
+#SHARES 5
+#IN a
+#RANDOMS r0 r1 r2 r3 r4
+#OUT d
+#CAR 3329
+
+t0 =  r0 + -1 r1
+t1 =  r1 + -1 r2
+t2 =  r2 + -1 r3
+t3 =  r3 + -1 r4
+t4 =  r4 + -1 r0
+
+d0 = a0 + t0
+d1 = a1 + t1
+d2 = a2 + t2
+d3 = a3 + t3
+d4 = a4 + t4

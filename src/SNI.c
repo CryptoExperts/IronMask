@@ -12,7 +12,7 @@
 #include "combinations.h"
 #include "coeffs.h"
 #include "verification_rules.h"
-#include "constructive.h"
+#include "constructive_arith.h"
 #include "dimensions.h"
 
 
@@ -40,36 +40,44 @@ static void display_failure(const Circuit* c, Comb* comb, int comb_len, SecretDe
 }
 
 
-void compute_SNI_with_incompr(Circuit* circuit, int t) {
+void compute_SNI_with_incompr(Circuit* circuit, int t, int cores) {
   if (t >= circuit->share_count) {
     fprintf(stderr, "Gadget with %d shares cannot be %d-SNI.\n", circuit->share_count, t);
     return;
   }
-  Trie* incompr_NI = compute_incompr_tuples(circuit,
+  Trie* incompr_NI = compute_incompr_tuples_arith(circuit,
                                             t+1, // t_in
                                             NULL, // prefix
                                             t, // max_size
                                             true, // include_outputs
-                                            0, // min_outputs
+                                            -1, // min_outputs
+                                            false, //remove_output
+                                            cores,
+                                            true, //one_failure
                                             0 // verbose
                                             );
   if (trie_size(incompr_NI)) {
     fprintf(stderr, "Gadget is not NI, and thus not SNI either. The following tuples are leaking: ");
     print_all_tuples(incompr_NI);
+    free_trie(incompr_NI);
     return;
   }
   fprintf(stderr, "Gadget is %d-NI. Checking SNI now...\n\n", t);
-
+  free_trie(incompr_NI);
+  
   for (int out_size = 1; out_size <= t; out_size++) {
     fprintf(stderr, "\rChecking with %d output wires...", out_size);
     fflush(stderr);
     int share_count_for_failure = t - out_size + 1;
-    Trie* incompr = compute_incompr_tuples(circuit,
+    Trie* incompr = compute_incompr_tuples_arith(circuit,
                                            share_count_for_failure, // t_in
                                            NULL, // prefix
                                            t, // max_size
                                            true, // include_outputs
                                            out_size, // min_outputs
+                                           false, //remove_outputs
+                                           cores,
+                                           true, //one_failure
                                            0 // debug
                                            );
     if (trie_size(incompr)) {
@@ -83,14 +91,23 @@ void compute_SNI_with_incompr(Circuit* circuit, int t) {
     free_trie(incompr);
   }
 
-  printf("\rGadget is %d-SNI.                                         \n\n", t);
+  printf("Gadget is %d-SNI.\n", t);
 
 }
 
 
 void compute_SNI(Circuit* circuit, int cores, int t) {
+  if (circuit->characteristic != 2){
+    compute_SNI_with_incompr(circuit, t, cores);
+    return;
+  }
+  
   DimRedData* dim_red_data = remove_elementary_wires(circuit, true);
+  CorrectionOutputs * test = circuit->deps->correction_outputs;
+  printf("\n ************* \n\n corr_outputs_count = %d\n **************** \n\n", test->length); 
   advanced_dimension_reduction(circuit);
+  CorrectionOutputs *test2 = circuit->deps->correction_outputs;
+  printf("\n ************* \n\n corr_outputs_count = %d\n **************** \n\n", test2->length); 
 
   /* if (! circuit->contains_mults) { */
   /*   compute_SNI_with_incompr(circuit, t); */
@@ -102,6 +119,9 @@ void compute_SNI(Circuit* circuit, int cores, int t) {
      has_random = false;
      remove_randoms(circuit);
   }
+  
+  CorrectionOutputs * test3 = circuit->deps->correction_outputs;
+  printf("\n ************* \n\n corr_outputs_count = %d\n **************** \n\n", test3->length); 
 
   struct callback_data data = { .sni_order = t };
 

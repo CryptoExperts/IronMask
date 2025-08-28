@@ -190,6 +190,135 @@ void compute_rands_usage(Circuit* c) {
   c->has_input_rands = has_input_rands;
 }
 
+// Computes |c->i1_rands|, |c->i2_rands|, |c->out_rands|, ie, which
+// randoms are used to refresh the 1st input, the 2nd input, and the
+// output. Note that this is only computed if |c| contains some
+// multiplications.
+void compute_rands_usage_arith(Circuit* c) {
+  if (!c->contains_mults) {
+    c->i1_rands  = NULL;
+    c->i2_rands  = NULL;
+    c->out_rands = NULL;
+    c->has_input_rands = false;
+    return;
+  }
+  
+  
+  int shares = c->share_count;
+  DependencyList* deps = c->deps;
+  int deps_size = deps->deps_size;
+  int first_rand_idx = deps->first_rand_idx;
+  int non_mult_deps_count = c->deps->deps_size - c->deps->mult_deps->length;
+  
+  bool* i1_rands  = calloc(non_mult_deps_count, sizeof(*i1_rands));
+  bool* i2_rands  = calloc(non_mult_deps_count, sizeof(*i2_rands));
+  bool* out_rands = calloc(non_mult_deps_count, sizeof(*out_rands));
+  bool has_input_rands = false;
+
+  // Slightly weird to put input 1 and 2 here since they are not
+  // randoms, but it simplifies the code later..
+  i1_rands[0] = 1;
+  i2_rands[1] = 1;
+
+  // We iterate over each probe (dependency), and, if they contain a
+  // random, we check what else it contains:
+  //
+  //  - if it contains an input share, then this random is associated
+  //    with the corresponding input.
+  //
+  //  - if it contains a multiplication, then this random is added to
+  //    out_rands.
+  for (int i = 0; i < deps->length; i++) {
+    Dependency* dep = deps->deps_exprs[i];
+    
+    for (int l = 0; l < shares ; l++){ 
+      if (dep[l]) {
+        for (int j = first_rand_idx; j < non_mult_deps_count; j++) {
+          i1_rands[j] |= (dep[j] != 0) ;
+          if (dep[j]) has_input_rands = true;
+        }
+      }
+    }
+      
+    for (int l = shares; l < 2 * shares; l++) {  
+      if (dep[l]) {
+        for (int j = first_rand_idx; j < non_mult_deps_count; j++) {
+          i2_rands[j] |= (dep[j] != 0);
+          if (dep[j]) has_input_rands = true;
+        }
+      }
+    }
+    
+      
+    for (int k = non_mult_deps_count; k < deps_size; k++) {
+      if (dep[k]) {
+        for (int j = first_rand_idx; j < non_mult_deps_count; j++) {
+          out_rands[j] |= (dep[j] != 0);
+          //if (dep[j]) has_input_rands = true;
+        }
+        break;
+      }
+    }
+  }
+
+  // At this point, it's possible that some randoms are neither in
+  // i1_rands/i2_rands nor out_rands. For instance, consider the
+  // following gadget:
+  //
+  //      ta = a0 ^ r0
+  //      tb = b0 ^ r1
+  //      mt = ta * tb
+  //      ...
+  //      ha = r0 ^ r4
+  //      hb = r1 ^ r5
+  //      mh = ha * hb
+  //      ...
+  //      _ = mt + mh
+  //
+  // In this case, r4 and r5 are not directly added with an input or a
+  // multiplication. However, they are added to randoms (r0 and r1)
+  // that themselves are added to some input shares (namely, a0 and b0).
+  //
+  // To account for such cases, we now iterate over all dependencies,
+  // and check that all randoms are either in i1_rands, i2_rands or
+  // out_rands. If we find some lone randoms, we infer their "group"
+  // from other randoms of the dependency.
+  //
+  // (this could have been done in the previous step, but it seems
+  // more maintainable to do it separately)
+  
+  
+  for (int i = 0; i < deps->length; i++) {
+    Dependency* dep = deps->deps_exprs[i];
+    for (int j = first_rand_idx; j < non_mult_deps_count; j++) {
+      if (dep[j] && !i1_rands[j] && !i2_rands[j] && !out_rands[j]) {
+        // The random i does not have a group yet -> searching for
+        // other randoms in the dependency (one of them should have a
+        // group).
+        for (int k = first_rand_idx; k < non_mult_deps_count; k++) {
+          if (dep[k] && i1_rands[k]) {
+            i1_rands[j] |= (dep[j] != 0);
+            break;
+          } else if (dep[k] && i2_rands[k]) {
+            i2_rands[j] |= (dep[j] != 0);
+            break;
+          } else if (dep[k] && out_rands[k]) {
+            out_rands[j] |= (dep[j] != 0);
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  c->i1_rands        = i1_rands;
+  c->i2_rands        = i2_rands;
+  c->out_rands       = out_rands;
+  c->has_input_rands = has_input_rands;
+}
+
+
+
 
 void _update_contained_secrets(Dependency** contained_secrets, int idx, DependencyList* deps,
                                int secret_count, int nb_rands, int nb_shares,
@@ -315,6 +444,65 @@ void compute_contained_secrets(Circuit* c, int ** temporary_mult_idx) {
 
   c->deps->contained_secrets = contained_secrets;
 }
+
+
+
+
+
+void _update_contained_secrets_arith(Dependency* contained_secrets, DependencyList* deps,
+                               int secret_count, int non_mult_deps_count,
+                               Dependency* dep) {
+  // Direct dependencies on secrets
+  for (int i = 0; i < secret_count; i++) {
+    contained_secrets[i] |= dep[i];
+  }
+
+  // Following multiplications
+  for (int i = 0; i < deps->mult_deps->length; i++) {
+    if (dep[non_mult_deps_count+i]) {
+      MultDependency* mult_dep = deps->mult_deps->deps[i];
+      if(!mult_dep->contained_secrets)
+        mult_dep->contained_secrets = calloc(secret_count, sizeof(*mult_dep->contained_secrets));
+      for (int j = 0; j < secret_count; j++) {
+        mult_dep->contained_secrets[j] |= mult_dep->left_ptr[j] | mult_dep->right_ptr[j];
+      }
+      _update_contained_secrets_arith(contained_secrets, deps, secret_count, non_mult_deps_count,
+                                mult_dep->left_ptr);
+      _update_contained_secrets_arith(contained_secrets, deps, secret_count, non_mult_deps_count,
+                                mult_dep->right_ptr);
+    }
+  }
+}
+
+// Computes |c->deps->contained_secrets|, ie, which secret shares are
+// in each variable.
+void compute_contained_secrets_arith(Circuit* c) {
+  int non_mult_deps_count = c->deps->deps_size - c->deps->mult_deps->length;
+
+  Dependency** contained_secrets = malloc(c->deps->length * sizeof(*contained_secrets));
+  for (int i = 0; i < c->deps->length; i++) {
+    // Allocating arrays of size 2 instead of size |c->secret_count|
+    // so that we can always access the 2nd element without undefined
+    // behavior, which removes the need for some "if (secret_count ==
+    // 2)" at a few places.
+    //assert(c->secret_count <= 2); // Just in case, although for now this can't be false
+    contained_secrets[i] = calloc(c->secret_count * c->share_count, sizeof(**contained_secrets));
+    DepArrVector* dep_arr = c->deps->deps[i];
+    for (int dep_idx = 0; dep_idx < dep_arr->length; dep_idx++) {
+      _update_contained_secrets_arith(contained_secrets[i], c->deps, 
+                                c->secret_count * c->share_count,
+                                non_mult_deps_count, dep_arr->content[dep_idx]);
+    }
+  }
+
+  c->deps->contained_secrets = contained_secrets;
+}
+
+
+
+
+
+
 
 
 // Creates the BitDeps corresponding to the DependencyList in |circuit|.
@@ -688,13 +876,82 @@ void print_circuit(const Circuit* c) {
     }
     printf("\n");
   }
+}
+
+void print_circuit_arith(const Circuit* c) {
+  DependencyList* deps = c->deps;
+  int deps_size = deps->deps_size;
+  MultDependencyList* mult_deps = deps->mult_deps;
+
+  printf("Circuit with %d variables\n", c->length);
+  printf("total_wires = %d\n", c->total_wires);
+  printf("secret_count = %d\n", c->secret_count);
+  printf("output_count = %d\n", c->output_count);
+  printf("random_count = %d\n", c->random_count);
+  printf("share_count = %d\n", c->share_count);
+  printf("all_shares_mask = %d\n", c->all_shares_mask);
+  printf("contains_mults = %d\n", c->contains_mults);
+  printf("has_input_rands = %d\n", c->has_input_rands);
+  printf("mult_count = %d\n", c->deps->mult_deps->length);
+  printf("characteristic = %d\n", c->characteristic);
+  
+
+  printf("Dependencies:\n");
+  for (int i = 0; i < deps->length; i++) {
+    printf("%3d: {", i);
+    for (int j = 0; j < deps->deps[i]->length; j++) {
+      printf(j == 0 ? " [ " : "       [ ");
+      for (int k = 0; k < deps_size; k++) {
+        printf("%d ", deps->deps[i]->content[j][k]);
+      }
+      printf(j == deps->deps[i]->length-1 ? "] " : "]\n");
+    }
+
+      for (int k = 0; k < c->secret_count * c->share_count; k++) {
+        printf("%d ", deps->contained_secrets[i][k]);
+      }
+
+    printf(" }  [%s]\n", deps->names[i]);
+  }
+
+  if (c->contains_mults) {
+    printf("\nMultiplications:\n");
+    for (int i = 0; i < mult_deps->length; i++) {
+      int left_idx  = mult_deps->deps[i]->left_idx;
+      int right_idx = mult_deps->deps[i]->right_idx;
+      printf("%2d: %2d * %2d   [%s * %s]\n", i,
+             left_idx, right_idx,
+             deps->names[left_idx], deps->names[right_idx]);
+    }
+    
+    int non_mult_deps_count = deps_size - mult_deps->length;
+    int refresh_i1 = 0, refresh_i2 = 0, refresh_out = 0;
+    for (int i = deps->first_rand_idx; i < non_mult_deps_count; i++) {
+      refresh_i1 += c->i1_rands[i];
+      refresh_i2 += c->i2_rands[i];
+      refresh_out += c->out_rands[i];
+    }
+
+    printf("\nRefreshes: %d on input 1, %d on input 2, %d on output.\n\n",
+           refresh_i1, refresh_i2, refresh_out);
+  }
+
+  /* printf("\nWeights: { "); */
+  /* for (int i = 0; i < deps->length; i++) { */
+  /*   printf("%d ", c->weights[i]); */
+  /* } */
+  /* printf("}\n\n"); */
 
 }
 
 void free_circuit(Circuit* c) {
+  int characteristic = c->characteristic;
   for (int i = 0; i < c->deps->mult_deps->length; i++) {
     //if(c->deps->mult_deps->deps[i]->idx_same_as == -1){
     free(c->deps->mult_deps->deps[i]->contained_secrets);
+    free(c->deps->mult_deps->deps[i]->name);
+    free(c->deps->mult_deps->deps[i]->name_left);
+    free(c->deps->mult_deps->deps[i]->name_right);
     //}
     free(c->deps->mult_deps->deps[i]);
   }
@@ -705,13 +962,15 @@ void free_circuit(Circuit* c) {
     free(c->deps->deps_exprs[i]);
     free(c->deps->names[i]);
     free(c->deps->contained_secrets[i]);
-    BitDepVector_deep_free(c->deps->bit_deps[i]);
+    if (characteristic == 2) 
+      BitDepVector_deep_free(c->deps->bit_deps[i]);
   }
   free(c->deps->deps);
   free(c->deps->deps_exprs);
   free(c->deps->names);
   free(c->deps->contained_secrets);
-  free(c->deps->bit_deps);
+  if (characteristic == 2) 
+    free(c->deps->bit_deps);
   free(c->deps);
   free(c->weights);
   if (c->contains_mults){

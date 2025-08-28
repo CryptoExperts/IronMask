@@ -22,8 +22,8 @@ Trie* make_trie(int childs_len) {
 }
 
 void free_trie_node(TrieNode* trie, int childs_len) {
-    free(trie->secret_deps);
-    if (!trie->childs) {
+  free(trie->secret_deps);
+  if (!trie->childs) {
     free(trie);
     return;
   }
@@ -101,9 +101,64 @@ void insert_in_trie(Trie* trie, Comb* comb, int comb_len, SecretDep* secret_deps
                   secret_deps, 0);
 }
 
+void _insert_in_trie_arith(TrieNode* trie, int childs_len,
+                     Comb* comb, int comb_len,
+                     SecretDep* secret_deps, int secret_deps_len) {
+                     
+  if (comb_len == 0) {
+    if (secret_deps_len && trie->secret_deps) {
+      for (int i = 0; i < secret_deps_len; i++) {
+        trie->secret_deps[i] |= secret_deps[i];
+      }
+      free(secret_deps);
+    } else {
+      trie->secret_deps = secret_deps;
+      
+      /* To prevent bug from the form : tuple in [9,10,13,17] and I want to 
+         add [9,10,13], so I have to remove the last element 17.*/
+      if (trie->childs){  
+        for (int i = 0; i < childs_len; i++){
+          if (trie->childs[i]){
+            free_trie_node(trie->childs[i], childs_len);
+          }
+        }
+        free(trie->childs);
+        trie->childs = NULL; 
+      }
+    }
+    return;
+  }
+  if (!trie->childs) {
+    trie->childs = calloc(childs_len, sizeof(*trie->childs));
+  }
+  if (!trie->childs[*comb]) {
+    trie->childs[*comb] = calloc(1, sizeof(*trie->childs[*comb]));
+  }
+  _insert_in_trie_arith(trie->childs[*comb], childs_len, comb+1, comb_len-1,
+                  secret_deps, secret_deps_len);
+  return;
+}
+
+void insert_in_trie_arith(Trie* trie, Comb* comb, int comb_len, 
+                    SecretDep* secret_deps) {
+  
+  _insert_in_trie_arith(trie->head, trie->childs_len, comb, comb_len,
+                  secret_deps, 0);  
+}
+
+
+
+
+
 void insert_in_trie_merge(Trie* trie, Comb* comb, int comb_len,
                           SecretDep* secret_deps, int secret_deps_len) {
   _insert_in_trie(trie->head, trie->childs_len, comb, comb_len,
+                  secret_deps, secret_deps_len);
+}
+
+void insert_in_trie_merge_arith(Trie* trie, Comb* comb, int comb_len,
+                          SecretDep* secret_deps, int secret_deps_len) {
+  _insert_in_trie_arith(trie->head, trie->childs_len, comb, comb_len,
                   secret_deps, secret_deps_len);
 }
 
@@ -118,6 +173,21 @@ int _trie_contains(TrieNode* trie, Comb* comb, int comb_len) {
 int trie_contains(Trie* trie, Comb* comb, int comb_len) {
   return _trie_contains(trie->head, comb, comb_len);
 }
+
+SecretDep *_is_in_trie(TrieNode *trie, Comb* comb, int comb_len){
+  if (trie && !trie->childs && comb_len == 0) return trie->secret_deps;
+  if (comb_len == 0) return NULL;
+  if (!trie->childs) return NULL;
+  if (!trie->childs[*comb]) return NULL;
+  return _is_in_trie(trie->childs[*comb], comb+1, comb_len-1);
+   
+}
+
+SecretDep *is_in_trie (Trie *trie, Comb *comb, int comb_len){
+  return _is_in_trie(trie->head, comb, comb_len);  
+}
+
+
 
 SecretDep* _trie_contains_subset(TrieNode* trie, Comb* comb, int comb_len) {
   if (!trie->childs) {
@@ -267,6 +337,260 @@ void _list_from_trie(TrieNode* trie, int childs_len,
   }
 }
 
+
+
+/*
+Recursive algorithm that evaluate if the |comb| contains in |trie| respect the 
+condition described in the function derive_trie_from_subset. If it's the case, 
+we add the tuples in |new_trie|.
+Input : 
+  -TrieNode *trie : The current Node in the Trie that we want to add tuples.
+  -int childs_len : Maximal number of childs that |trie| can have.
+  -int *subset : An array of index between |circuit_length| and 
+                |idx_output_end|.
+  -int len_subset : The size of the array.
+  -int circuit_length : Integer that is the start index that |subset| can have 
+                        in his element.
+  -Trie *new_trie : The trie in which we will be add the good tuple.
+  -Comb *work_comb : Tuple used recursively to found the tuples existing in 
+                     |trie|.
+  -int work_comb_idx : Integer used recursively with |work_comb|, 
+                       it is currently the size of |work_comb|.
+  -int nb_output : Integer used recursively with |work_comb|, it is the number
+                   output index existing in |work_comb|. 
+  -int secret_count : Number of secret for this gadget. 
+  -int idx_output_end : Integer that is the end index that |subset| can have 
+                        in his element.   
+*/
+void _derive_trie_from_subset(TrieNode *trie, int childs_len, int *subset, 
+                              int len_subset, int circuit_length, 
+                              Trie* new_trie, Comb *work_comb, 
+                              int work_comb_idx, int nb_output, 
+                              int secret_count, int idx_output_end){
+  if(!trie->childs){
+    SecretDep *secret_deps = calloc(secret_count, sizeof(*secret_deps)); 
+    memcpy(secret_deps, trie->secret_deps, secret_count * sizeof(*secret_deps));
+    Comb work_comb_cpy[work_comb_idx];
+    
+    for (int i = 0; i < work_comb_idx; i++){
+      if (work_comb[i] >= idx_output_end){
+        work_comb_cpy[i - nb_output] = work_comb[i];
+      }
+      else {
+        work_comb_cpy[i] = work_comb[i];
+      }
+    }
+    
+    insert_in_trie_arith(new_trie, work_comb_cpy, work_comb_idx - nb_output, 
+                   secret_deps);
+    
+    return;
+  }
+  
+  for (int i = 0; i < childs_len; i++){
+    if (trie->childs[i]){
+      int new_nb_output = nb_output;
+      if (i >= circuit_length){
+        if (i < idx_output_end){
+          bool is_good = false;
+          for (int j = 0; j < len_subset; j++) {
+            if (i == subset[j]) {
+              is_good = true;
+              new_nb_output++;    
+              break;
+            }
+          }
+          if (!(is_good)) continue;/* Le tuple n'est pas bon, ne pas l'ajouter*/
+        }
+      }
+      
+      work_comb[work_comb_idx] = i;
+      _derive_trie_from_subset(trie->childs[i], childs_len, subset, len_subset, 
+                               circuit_length, new_trie, work_comb, 
+                               work_comb_idx + 1, new_nb_output, secret_count,
+                               idx_output_end);                           
+    }
+  }   
+}
+
+/*
+Recursive algorithm who adds tuples of size |size| existing into the node |trie| 
+to the Trie |new_trie|.
+Input : 
+  -TrieNode *trie : The current Node in the Trie that we want to add tuples.
+  -Trie *new_trie : The trie in which we will be add the good tuple.
+  -int size : The size of the tuples we want to add.
+  -int childs_len : Maximal number of childs that |trie| can have.
+  -Comb *work_comb : Tuple used recursively to found the tuples existing in 
+                     |trie|.
+  -int work_comb_idx : Integer used recursively with |work_comb|, 
+                       it is currently the size of |work_comb|.
+  -int secret_count : Number of secret for this gadget. 
+*/
+static void _add_tuples_to_trie_size(TrieNode *trie, Trie *new_trie, int size,
+                                     int childs_len, Comb *work_comb, 
+                                     int work_comb_idx, int secret_count){
+
+  if (!trie->childs){
+    //We found a |comb| existing in the original Trie. 
+    if (size == 0) {
+      //If the size is different from 0, then the tuples mustn't be add.
+      if (!trie_contains_subset(new_trie, work_comb, work_comb_idx)){
+        //If the |new_trie| contains a subset of our |comb|, then the tuples
+        //mustn't be add.  
+        SecretDep *secret_deps = calloc(secret_count, sizeof(*secret_deps)); 
+        memcpy(secret_deps, trie->secret_deps, secret_count * 
+               sizeof(*secret_deps));
+        insert_in_trie_arith(new_trie, work_comb, work_comb_idx, secret_deps);
+      }
+    }  
+    return;
+  }
+  
+  for (int i = 0; i < childs_len; i++) {
+    if (trie->childs[i]) {
+      work_comb[work_comb_idx] = i;
+      _add_tuples_to_trie_size(trie->childs[i], new_trie, size - 1, childs_len, 
+                               work_comb, work_comb_idx+1, secret_count);
+    }
+  }
+}
+
+/*
+Compute a new Trie from another Trie by only adding tuples who contains a 
+subset of |subset| between the index >= |circuit_length| and 
+index <= |idx_output_end|. And in this case, removing the subset.
+Input :
+  -Trie *trie :The original Trie.
+  -int *subset : An array of index between |circuit_length| and |idx_output_end|
+  -int len_subset : The size of the array.
+  -int circuit_length : Integer that is the start index that |subset| can have 
+                        in his element.
+  -int secret_count : Number of secret for this gadget.
+  -int idx_output_end : Integer that is the end index that |subset| can have 
+                        in his element.
+  -int coeff_max : The maximal coefficient that we have to compute.
+Output : A new Trie which only have tuples of the forme described above. 
+*/
+Trie *derive_trie_from_subset(Trie *trie, int *subset, int len_subset, 
+                              int circuit_length, int secret_count, 
+                              int idx_output_end, int coeff_max){
+  
+  Trie *new_trie = make_trie(trie->childs_len);
+  // Assumes that no incompressible tuple is more than 100 elements long
+  Comb work_comb[100] = { 0 };
+  _derive_trie_from_subset(trie->head, trie->childs_len, subset, len_subset, 
+                           circuit_length, new_trie, work_comb, 0, 0, 
+                           secret_count, idx_output_end);
+                           
+  
+  /* The trie here is not incompressible, 
+     for example we can have 3 output sets possible : [24, 25], [24,26], 
+     [25,26].
+     Then, we can have in our first trie the following tuples :
+     -  [6, 16, 19, 24]
+     -  [0, 6, 16, 17, 19, 23, 25]
+     
+     When we apply _derive_trie_from_subset to this trie with the output set 
+     [24,25]. It returns a trie containing :
+     -  [6, 16, 19]
+     -  [0, 6, 16, 17, 19, 23]
+     
+     We see that [0, 6, 16, 17, 19] is include in [6, 16, 19]. So the trie 
+     obtained from _derive_trie_from_subset is not full of incompressible 
+     tuples.
+     We have to do one more step to create the trie of incompressible tuples 
+     that we want. 
+  */
+  
+  Trie *final_trie = make_trie(trie->childs_len);
+  for (int size = 0; size <= coeff_max ; size++){
+    _add_tuples_to_trie_size(new_trie->head, final_trie, size, 
+                             trie->childs_len, work_comb, 0, secret_count);
+  }
+    
+  free_trie(new_trie); 
+
+  return final_trie;
+} 
+
+ListComb* list_from_trie(Trie* trie, int comb_len) {
+  ListComb* list = make_empty_list();
+  TrieNode* head = trie->head;
+  if (head->secret_deps && comb_len == 0){
+    Comb *comb = malloc(comb_len * sizeof(*comb));
+    add_with_deps(list, comb, head->secret_deps);
+  }
+  else if (comb_len == 0) return list;
+  
+  else if (head->childs){
+    for (int i = 0; i < trie->childs_len; i++) {
+      if (head->childs[i]) {
+        Comb* comb = malloc(comb_len * sizeof(*comb));
+        comb[0] = i;
+        _list_from_trie(head->childs[i], trie->childs_len, list, comb, 1, 
+                        comb_len);            
+      }
+    }
+  }
+  return list;
+}
+
+/*
+Recursive algorithm that adds all the informations contained in the TrieNode 
+*trie in the Trie *trie_copy.
+Input : 
+  -TrieNode *trie : The current Node in the Trie we want to copy.
+  -Trie *trie_copy : The trie in which we will be copying |trie|.
+  -Comb *work_comb : Tuple used recursively to found the tuples existing in 
+                     |trie|.
+  -int work_comb_idx : Integer used recursively with |work_comb|, 
+                       it is currently the size of |work_comb|.
+  -int childs_len : Maximal number of childs that |trie| can have.
+  -int secret_count : Number of secret for this gadget.     
+*/
+void _trie_copy(TrieNode *trie, Trie *trie_copy, Comb *work_comb, 
+                int work_comb_idx, int childs_len, int secret_count){
+  if (!trie->childs){
+    SecretDep *secret_deps_copy = malloc(secret_count * 
+                                         sizeof(*secret_deps_copy));
+    
+    memcpy(secret_deps_copy, trie->secret_deps, 
+           secret_count * sizeof(*secret_deps_copy));
+    
+    insert_in_trie_arith(trie_copy, work_comb, work_comb_idx, secret_deps_copy);
+  }
+  
+  else {
+    for (int i = 0; i < childs_len; i++){
+      if (trie->childs[i]){
+        work_comb[work_comb_idx] = i;
+        _trie_copy(trie->childs[i], trie_copy, work_comb, work_comb_idx + 1, 
+                   childs_len, secret_count);
+      }
+    }
+  }
+}
+
+/*
+Make a copy from an original Trie.
+Input : 
+  - Trie *trie : The original Trie.
+  - int secret_count : The number of secrets for this gadget.
+Output : A copy of Trie *trie. 
+*/
+Trie *trie_copy(Trie *trie, int secret_count){
+  Trie *trie_copy = make_trie(trie->childs_len);
+  Comb work_comb[100] = { 0 };
+  _trie_copy(trie->head, trie_copy, work_comb, 0, trie->childs_len, 
+             secret_count);
+  return trie_copy;
+}
+
+
+
+
+/*
 ListComb* list_from_trie(Trie* trie, int comb_len) {
   ListComb* list = make_empty_list();
   TrieNode* head = trie->head;
@@ -278,7 +602,7 @@ ListComb* list_from_trie(Trie* trie, int comb_len) {
     }
   }
   return list;
-}
+}*/
 
 // Main for debug
 /* int main() { */

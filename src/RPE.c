@@ -13,6 +13,7 @@
 #include "combinations.h"
 #include "coeffs.h"
 #include "verification_rules.h"
+#include "constructive_arith.h"
 
 #define COEFFS_COUNT    4
 #define I1_or_I2        0
@@ -935,6 +936,11 @@ uint64_t** compute_RPE_copy(Circuit* circuit, DimRedData* dim_red_data,
 
 
 void compute_RPE_coeffs(Circuit* circuit, int cores, int coeff_max, int t, int t_output) {
+
+  if (circuit->characteristic != 2){
+    return compute_RPE_coeffs_incompr_arith(circuit, coeff_max, true , t_output, 
+                                      cores, 0);
+  }
 
   DimRedData* dim_red_data = remove_elementary_wires(circuit, true);
 

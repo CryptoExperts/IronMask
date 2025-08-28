@@ -13,6 +13,7 @@
 #include "coeffs.h"
 #include "verification_rules.h"
 #include "dimensions.h"
+#include "constructive_arith.h"
 
 
 struct callback_data {
@@ -44,69 +45,76 @@ void compute_RP_coeffs(Circuit* circuit, int cores, int coeff_max, int opt_incom
     coeffs[i] = 0;
   }
 
-  DimRedData* dim_red_data = remove_elementary_wires(circuit, true);
-  int coeff_max_main_loop = coeff_max == -1 ? circuit->length :
-    coeff_max > circuit->length ? circuit->length : coeff_max;
-
-  if (coeff_max == -1) {
-    coeff_max = dim_red_data->old_circuit->length;
+  if (circuit->characteristic != 2){
+    if (coeff_max == -1)
+      coeff_max = circuit->total_wires;
+    compute_RP_coeffs_incompr_arith(circuit, coeff_max, cores, false);
   }
+  else {
+    DimRedData* dim_red_data = remove_elementary_wires(circuit, true);
+    int coeff_max_main_loop = coeff_max == -1 ? circuit->length :
+      coeff_max > circuit->length ? circuit->length : coeff_max;
 
-  Trie* incompr_tuples = opt_incompr ? make_trie(circuit->length) : NULL;
-
-  struct callback_data data = {
-    .coeffs = coeffs,
-  };
-
-
-  // Computing coefficients
-  printf("f(p) = [ "); fflush(stdout);
-  for (int size = 0; size <= coeff_max_main_loop; size++) {
-
-    find_all_failures(circuit,
-                      cores,
-                      -1,    // t_in
-                      NULL,  // prefix
-                      size,  // comb_len
-                      coeff_max,  // max_len
-                      dim_red_data,
-                      true, // has_random
-                      NULL,  // first_comb
-                      false,  // include_outputs
-                      0,     // shares_to_ignore
-                      false, // PINI
-                      incompr_tuples,
-                      update_coeffs,
-                      (void*)&data);
-
-    // A failure of size 0 is not possible. However, we still want to
-    // iterate in the loop with |size| = 0 to generate the tuples with
-    // only elementary shares (which, because of the dimension
-    // reduction, are never generated otherwise).
-    if (size > 0) {
-      printf("%"PRIu64", ", coeffs[size]); fflush(stdout);
+    if (coeff_max == -1) {
+      coeff_max = dim_red_data->old_circuit->length;
     }
+
+    Trie* incompr_tuples = opt_incompr ? make_trie(circuit->length) : NULL;
+
+    struct callback_data data = {
+      .coeffs = coeffs,
+    };
+
+
+    // Computing coefficients
+    printf("f(p) = [ "); fflush(stdout);
+    for (int size = 0; size <= coeff_max_main_loop; size++) {
+
+      find_all_failures(circuit,
+                        cores,
+                        -1,    // t_in
+                        NULL,  // prefix
+                        size,  // comb_len
+                        coeff_max,  // max_len
+                        dim_red_data,
+                        true, // has_random
+                        NULL,  // first_comb
+                        false,  // include_outputs
+                        0,     // shares_to_ignore
+                        false, // PINI
+                        incompr_tuples,
+                        update_coeffs,
+                        (void*)&data);
+
+      // A failure of size 0 is not possible. However, we still want to
+      // iterate in the loop with |size| = 0 to generate the tuples with
+      // only elementary shares (which, because of the dimension
+      // reduction, are never generated otherwise).
+      if (size > 0) {
+        printf("%"PRIu64", ", coeffs[size]); fflush(stdout);
+      }
+    } 
+
+    for (int i = coeff_max_main_loop+1; i < dim_red_data->old_circuit->total_wires; i++) {
+      printf("%"PRIu64", ", coeffs[i]);
+    }
+    printf("%"PRIu64" ]\n", coeffs[circuit->total_wires]);
+
+    double p_min = compute_leakage_proba(coeffs, coeff_max,
+                                         circuit->total_wires+1,
+                                         1, // minimax
+                                         false); // square root
+    double p_max = compute_leakage_proba(coeffs, coeff_max,
+                                         circuit->total_wires+1,
+                                         -1, // minimax
+                                         false); // square root
+
+    printf("\n");
+    printf("pmax = %.10f -- log2(pmax) = %.10f\n", p_max, log2(p_max));
+    printf("pmin = %.10f -- log2(pmin) = %.10f\n", p_min, log2(p_min));
+    printf("\n");
+
+    get_failure_proba(coeffs, circuit->total_wires+1, 0.01, coeff_max_main_loop);
+    free_dim_red_data(dim_red_data);
   }
-
-  for (int i = coeff_max_main_loop+1; i < dim_red_data->old_circuit->total_wires; i++) {
-    printf("%"PRIu64", ", coeffs[i]);
-  }
-  printf("%"PRIu64" ]\n", coeffs[circuit->total_wires]);
-
-  double p_min = compute_leakage_proba(coeffs, coeff_max,
-                                       circuit->total_wires+1,
-                                       1, // minimax
-                                       false); // square root
-  double p_max = compute_leakage_proba(coeffs, coeff_max,
-                                       circuit->total_wires+1,
-                                       -1, // minimax
-                                       false); // square root
-
-  printf("\n");
-  printf("pmax = %.10f -- log2(pmax) = %.10f\n", p_max, log2(p_max));
-  printf("pmin = %.10f -- log2(pmin) = %.10f\n", p_min, log2(p_min));
-  printf("\n");
-
-  get_failure_proba(coeffs, circuit->total_wires+1, 0.01, coeff_max_main_loop);
-  free_dim_red_data(dim_red_data);
 }

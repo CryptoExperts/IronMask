@@ -14,6 +14,7 @@
 #include "verification_rules.h"
 #include "parser.h"
 #include "coeffs.h"
+#include "cardRPC.h" 
 #include "NI.h"
 #include "SNI.h"
 #include "freeSNI.h"
@@ -59,8 +60,9 @@ int is_double(char* s) {
 
 void usage() {
   printf("Usage:\n"
-         "    ironmask [OPTIONS] [NI|SNI|freeSNI|uniformSNI|IOS|PINI|RP|RPC|RPE|CNI|CRP|CRPC] FILE\n"
-         "Computes the probing (NI, SNI, PINI) or random probing property (RP, RPC, RPE) or the combined fault property (CNI) for FILE\n\n"
+         "    ironmask [OPTIONS] [NI|SNI|freeSNI|uniformSNI|IOS|PINI|RP|RPC|RPE|cardRPC|CNI|CRP|CRPC|cardRPC] FILE\n"
+         "Computes the probing (NI, SNI, PINI) or random probing property (RP, RPC, RPE) or the combined fault property (CNI) for FILE\n"
+         "Computes the cardinal RPC enveloppes (cardRPC) for refresh gadgets in arithmetic field.\n\n"
 
          "Options:\n"
          "    -v[num], --verbose[num]             Sets verbosity level.\n"
@@ -227,7 +229,8 @@ int main(int argc, char** argv) {
         (strcmp(argv[optind], "RPE")  == 0) ||
         (strcmp(argv[optind], "CNI") == 0)  ||
         (strcmp(argv[optind], "CRP") == 0)  ||
-        (strcmp(argv[optind], "CRPC") == 0)) {
+        (strcmp(argv[optind], "CRPC") == 0) ||
+        (strcmp(argv[optind], "cardRPC") == 0)) {
       property = argv[optind];
     } else {
       if (filename) {
@@ -292,9 +295,17 @@ int main(int argc, char** argv) {
   pf->glitch = glitch;
   pf->transition = transition;
 
-  Circuit* circuit = gen_circuit(pf, glitch, transition, NULL);
-
-  //print_circuit(circuit);
+  int characteristic = pf->characteristic;
+  Circuit* circuit;
+  
+  if (characteristic == 2){
+    circuit = gen_circuit(pf, glitch, transition, NULL);
+    //print_circuit(circuit);
+  }
+  else{ 
+    circuit = gen_circuit_arith(pf, characteristic);
+    //print_circuit_arith(circuit);  
+  }
 
   printf("Gadget with %d input(s),  %d output(s),  %d share(s)\n"
          "Total number of intermediate variables : %d\n"
@@ -320,7 +331,6 @@ int main(int argc, char** argv) {
   }
 
   initialize_table_coeffs();
-
   time_t start, end;
   time(&start);
   if (strcmp(property, "constr") == 0) {
@@ -341,6 +351,8 @@ int main(int argc, char** argv) {
     compute_RPC_coeffs(circuit, cores, coeff_max, opt_incompr, t, t_output);
   } else if (strcmp(property, "RPE") == 0) {
     compute_RPE_coeffs(circuit, cores, coeff_max, t, t_output);
+  } else if (strcmp(property, "cardRPC") == 0) {
+    env_cRPC(circuit, coeff_max, cores);
   } else if (strcmp(property, "CNI") == 0) {
     compute_CNI(pf, cores, t, k, set);
   } else if (strcmp(property, "CRP") == 0) {

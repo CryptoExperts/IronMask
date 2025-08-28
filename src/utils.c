@@ -24,6 +24,14 @@ int is_eol(char c) {
   return c == '\0' || c == '#';
 }
 
+int is_number (char c){
+  return 48 <= c && c <= 57; 
+}
+
+int is_coeff (char* s, int index){
+  return (is_number(s[index]) && (index == 0 || is_space(s[index - 1]) || s[index - 1] == '-'));
+}
+
 /* ***************************************************** */
 /*              String/Int map utilities                 */
 /* ***************************************************** */
@@ -241,10 +249,10 @@ void free_eq_list(EqList* l) {
 void print_eq_list(EqList* l) {
   for (EqListElem* el = l->head; el != NULL; el = el->next) {
     if (el->expr->op == Asgn) {
-      printf("%s = %s\n", el->dst, el->expr->left);
+      printf("%s = %d %s\n", el->dst, el->expr->coeff_left, el->expr->left);
     } else {
-      printf("%s = %s %s %s\n", el->dst, el->expr->left,
-             el->expr->op == Add ? "+" : "*", el->expr->right);
+      printf("%s = %d %s %s %d %s\n", el->dst, el->expr->coeff_left, el->expr->left,
+             el->expr->op == Add ? "+" : "*", el->expr->coeff_right, el->expr->right);
     }
   }
 }

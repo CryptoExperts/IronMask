@@ -1,4 +1,4 @@
-# IronMask and IronMask+
+# IronMask and IronMask+ and IronMaskArithmetic
 
 IronMask is a formal verification tool for the probing and random probing security of masked implementations. Its design is described in ["IronMask: Versatile Verification of Masking Security"](https://eprint.iacr.org/2021/1671).
 The verified properties are:
@@ -31,7 +31,23 @@ The additional verified properties are:
         - t: number of output shares to consider
         - k: maximum number of faults to consider
         - s: type of faults to consider (set:1, reset:0)
-        - c: bound on number of coefficients to compute 
+        - c: bound on number of coefficients to compute
+
+IronMaskArithmetic is another extension of IronMask able to verify probing and 
+random probing security properties of masked implementations on prime Arithmetic 
+field. The verified properties are :
+
+* Probing security:
+  + Non-Interference Security (NI)
+  + Strong Non-Interference Security (SNI)
+
+* Random probing security:
+  + Random Probing (RP)
+  + Random Probing Composability (RPC)
+  + Random Probing Expandability (RPE)
+  + Cardinal Random Probing Composability (cardRPC)
+
+Note that the last security property (cardRPC) is for now only available for refresh gadgets.
 
 
 ## Installation
@@ -54,14 +70,16 @@ This will produce the `ironmask` binary.
 
 ```
 Usage:
-    ironmask [OPTIONS] [P|NI|SNI|PINI|RP|RPC|RPE] FILE
-Computes the probing (P, NI, SNI, PINI) or random probing property (RP, RPC, RPE) for FILE
+    ironmask [OPTIONS] [NI|SNI|freeSNI|uniformSNI|IOS|PINI|RP|RPC|RPE|cardRPC|CNI|CRP|CRPC|cardRPC] FILE
+Computes the probing (NI, SNI, PINI) or random probing property (RP, RPC, RPE) or the combined fault property (CNI) for FILE
+Computes the cardinal RPC enveloppes (cardRPC) for refresh gadgets in arithmetic field.
 
 Options:
     -v[num], --verbose[num]             Sets verbosity level.
     -c[num], --coeff_max[num]           Sets the last precise coefficient to compute
                                         for RP-like properties.
-    -t[num]                             Sets the t parameter for P/NI/SNI/PINI/RPC/RPE.
+    -t[num]                             Sets the t parameter for NI/SNI/PINI/RPC/RPE/CRPC.
+    -k[num]                             Sets the k parameter for CNI/CRP/CRPC.
                                         This option is mandatory except when checking RP.
     -o[num], --t_output[num]            Sets the t_output parameter for RPC/RPE.
     -j[num], --jobs[num]                Sets the number of core to use.
@@ -74,7 +92,7 @@ Options:
     -h, --help                          Prints this help information.
 ```
 
-The parameter `t` is mandatory for all property except RP. When `t_output` is specified, the value of `t` is taken for input shares and the value of `t_output` for output shares. Otherwise, `t` is used for input shares and output shares.
+The parameter `t` is mandatory for all property except RP and cardRPC. When `t_output` is specified, the value of `t` is taken for input shares and the value of `t_output` for output shares. Otherwise, `t` is used for input shares and output shares.
 
 The parameter `coeff_max` specifies the maximum size of tuples to test during the verification (which is also the maximum coefficient in the evaluation of &epsilon; which will be computed exactly). This parameter is not needed for probing verification.
 
@@ -103,6 +121,12 @@ The parameter `coeff_max` specifies the maximum size of tuples to test during th
 
   ```
   ironmask gadget.sage RPE -c 5 -t 2 -t_output 1 -v 1
+  ```
+
+* The following command executes cardRP verification on the gadget `refresh.sage`, and stops at the maximum coefficient of 8:
+
+  ```
+  ironmask refresh.sage cardRPC -c 8
   ```
 
 * The following command executes RPC verification on the gadget `gadget.sage` with a value of `t = 2` for input and output shares, and stops at the maximum coefficient of 5:
@@ -173,6 +197,18 @@ For combined security, we add
 ```
 in the header to indicate that all the input shares are duplicated three thimes. In this example, the shares `a0, a1, b0, b1` are then manipulated with their copies, namely we use `a0_0, a0_1, a0_2` instead of `a0`.
 
+For verification of the gadget on arithmetic prime field (i.e. with IronMaskArithmetic), we add
+```
+#CAR q
+```
+in the header which specifies the characteristic of the field. 
+Furthermore, we can add coefficients to the instructions of the gadget, an example will be 
+```
+c0 = 3 a0 * -1 b0
+```
+The coefficient is placed before the variable, and after the operator. In this way, we add the coefficient 3 at a0 and -1 at b0. 
+
+
 ## Output Format
 
 The output is always a bit verbose, as the first thing being printed is the internal representation of the input gadgets, as well as some numbers on the gadgets (eg, number of inputs/outputs, randoms, intermediate variables....).
@@ -197,6 +233,59 @@ are printed to illustrate that.
 When checking RP, RPC or RPE, the coefficients computed for the
 function f(p) are shown, as well as the min/max failure probability
 computed from f(p). The output is fairly self-explanatory.
+
+### Output of Cardinal Random Probing Composition Verification (cardRPC)
+
+When checking cardRPC security property with a maximum coefficients `c`, the 
+output will be a list of coefficients for all $t_{in}$ and $t_{out}$. 
+Each coefficient $c_i$ of the list represents the number of tuples of size $i$
+which need $t_{in}$ inputs to simulate the leakage and the $t_{out}$ output 
+shares leaked. Here is an exemple of output for a refresh gadget with $n = 2$ 
+shares :
+
+```
+./ironmask gadgets/Arith/refresh/OPRefresh/gadget_OPRefresh_2_shares.sage cardRPC 
+
+in with 1 elements: {a:0, }
+randoms with 2 elements: {r0:0, r1:1, }
+out with 1 elements: {c:0, }
+Gadget with 1 input(s),  1 output(s),  2 share(s)
+Total number of intermediate variables : 6
+Total number of variables : 8
+Total number of Wires : 10
+Total number of duplications: 1
+
+tin = 0, tout = 0
+ f(p) = [ 1, 8, 28, 56, 70, 56, 28, 8, 1, 0, 0]
+
+tin = 0, tout = 1
+ f(p) = [ 1, 6, 6, 2, 0, 0, 0, 0, 0, 0, 0]
+
+tin = 0, tout = 2
+ f(p) = [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+
+tin = 1, tout = 0
+ f(p) = [ 0, 2, 16, 56, 112, 140, 112, 56, 16, 2, 0]
+
+tin = 1, tout = 1
+ f(p) = [ 0, 4, 36, 88, 128, 126, 84, 36, 9, 1, 0]
+
+tin = 1, tout = 2
+ f(p) = [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+
+tin = 2, tout = 0
+ f(p) = [ 0, 0, 1, 8, 28, 56, 70, 56, 28, 8, 1]
+
+tin = 2, tout = 1
+ f(p) = [ 0, 0, 3, 30, 82, 126, 126, 84, 36, 9, 1]
+
+tin = 2, tout = 2
+ f(p) = [ 1, 10, 45, 120, 210, 252, 210, 120, 45, 10, 1]
+
+
+Verification completed in 0 min 0 sec.
+```
+
 
 
 ## Internals

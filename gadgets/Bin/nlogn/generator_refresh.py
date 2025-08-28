@@ -1,4 +1,4 @@
-#!python
+#!/usr/bin/env python3
 
 from math import *
 
@@ -59,7 +59,7 @@ def create_nlogn_refresh(nb_shares):
 
 
 
-
+create_nlogn_refresh(3)
 create_nlogn_refresh(6)
 create_nlogn_refresh(7)
 create_nlogn_refresh(8)

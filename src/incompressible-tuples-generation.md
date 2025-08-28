@@ -39,20 +39,25 @@ works the same if we say "for each secret" around the whole thing.
    i means that this expression linearly depends on the i-th
    input/random. For instance, assuming a circuit with 1 input and 2
    randoms, `(0, 1, 1)` is a xor between the two randoms, and `(1, 0, 0)` 
-   is simply the first share of the inputs. Shares of the inputs are 
-   represented using powers of 2: `(1, 0, 0)` is the 1st share, 
-   `(4, 0, 0)` is the fourth.
+   is simply the first share of the inputs. In IronMask and IronMAsk+, 
+   shares of the inputs are represented using powers of 2: `(1, 0, 0)` 
+   is the 1st share, `(4, 0, 0)` is the third. In IronMaskArithmetic, 
+   expressions are reprensented using a vector where 0 is set at index i means 
+   that this expression does not linearly depend on the i-th input/random. In 
+   this case, `(0, 0, 0, 1, 1)` is a xor between the two randoms, 
+   `(1, 0, 0, 0, 0)` is simply the first share and `(0, 0, 1, 0, 0)` is the 
+   third share.
 
- - `vars` if the map defined above.
+ - `vars` is the map defined above.
  
  - `t` is a tuple. It is represented as an array of expressions
    (meaning that it's an array of vectors since expressions are
    represented using vectors)
    
- - `gauss_exprs` contains the value of the expressions inside `t`
+ - `gauss_deps` contains the value of the expressions inside `t`
    after gauss elimination.
    
- - `gauss_indices` contains the randoms used for the gauss
+ - `gauss_rands` contains the randoms used for the gauss
    elimination.
    
  - `revealed_secret` is an integer representing the part of the secret
@@ -74,23 +79,23 @@ proc build_all_incompressible_failures(vars:map):
 
 
 proc initialize_gauss(t:tuple, vars:map):
-    gauss_indices = []
-    gauss_exprs   = []
+    gauss_deps = []
+    gauss_rands = []
     revealed_secret = 0
     
     for i = 0 to t.size:
-        gauss_exprs[i] = t[i]
+        gauss_deps[i] = t[i]
         for j = 0 to i-1:
-            if gauss_exprs[i] contains gauss_indicies[j]:
-                gauss_exprs[i] ^= gauss_exprs[j]  # Note: this is a vector addition
-        gauss_indices[i] = "The first rand of gauss_exprs[i]"
-        if gauss_exprs[i] does not contain any random:
-            revealed_secret |= gauss_exprs[0] # assuming the secret is the first dependency
+            if gauss_deps[i] contains gauss_rands[j]:
+                gauss_deps[i] ^= gauss_deps[j]  # Note: this is a vector addition
+        gauss_rands[i] = "The first rand of gauss_deps[i]"
+        if gauss_deps[i] does not contain any random:
+            revealed_secret |= gauss_deps[0] # assuming the secret is the first dependency
             
-    add_randoms(t, vars, gauss_exprs, gauss_indices, revealed_secret, 0)
+    add_randoms(t, vars, gauss_deps, gauss_rands, revealed_secret, 0)
     
     
-proc add_random(t:tuple, m:map, gauss_exprs:dependency list, gauss_indices:int list,
+proc add_random(t:tuple, m:map, gauss_deps:dependency list, gauss_rands:int list,
                 revealed_secret:int, unmask_idx:int):
     if t reveals a secret: (revealed_secret == all shares)
         check if it's incompressibles
@@ -100,33 +105,33 @@ proc add_random(t:tuple, m:map, gauss_exprs:dependency list, gauss_indices:int l
     if unmask_idx == t.size:
         return
         
-    if revealed_secret already contains the secret shares of gauss_exprs[unmask_idx]
+    if revealed_secret already contains the secret shares of gauss_deps[unmask_idx]
         # TODO: maybe we should actually remove t[unmask_idx] in that case...
-        add_random(t, m, gauss_exprs, gauss_indices, revealed_secret, unmask_idx+1)
+        add_random(t, m, gauss_deps, gauss_rands, revealed_secret, unmask_idx+1)
         return
     else:
-        add_random(t, m, gauss_exprs, gauss_indices, revealed_secret, unmask_idx+1)
+        add_random(t, m, gauss_deps, gauss_rands, revealed_secret, unmask_idx+1)
         # Note: no return here!
     
-    rand_idx = gauss_indices[unmask_idx]
+    rand_idx = gauss_rands[unmask_idx]
     for each element e of vars[rand_idx] that is not already in t:
         t' = [t, e]
         i = t.size
-        gauss_exprs[unmask_idx+1] = e
+        gauss_deps[unmask_idx+1] = e
         
-        if e contains the same secret shares as gauss_exprs[unmask_idx]: ### CORRECT?
+        if e contains the same secret shares as gauss_deps[unmask_idx]: ### CORRECT?
             continue to next iteration
         
         for j = 0 to i-1:
-            if gauss_exprs[i] contains gauss_indicies[j]:
-                gauss_exprs[i] ^= gauss_exprs[j]  # Note: this is a vector addition
+            if gauss_deps[i] contains gauss_indicies[j]:
+                gauss_deps[i] ^= gauss_deps[j]  # Note: this is a vector addition
                 
-        if gauss_exprs[i] does not contain any random:
-            add_random(t', m, gauss_exprs, gauss_indices, 
-                       revealed_secret | gauss_exprs[0],
+        if gauss_deps[i] does not contain any random:
+            add_random(t', m, gauss_deps, gauss_rands, 
+                       revealed_secret | gauss_deps[0],
                        unmask_idx+1)
         else:
-            add_random(t', m, gauss_exprs, gauss_indices, 
+            add_random(t', m, gauss_deps, gauss_rands, 
                        revealed_secret,
                        unmask_idx+1)
 ```

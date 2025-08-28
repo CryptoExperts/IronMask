@@ -621,6 +621,7 @@ void advanced_dimension_reduction(Circuit* circuit) {
   new_deps->names          = malloc(deps->length * sizeof(*new_deps->names));
   new_deps->contained_secrets = malloc(deps->length * sizeof(*new_deps->contained_secrets));
   new_deps->bit_deps       = malloc(deps->length * sizeof(*new_deps->bit_deps));
+  //new_deps->correction_outputs = circuit->deps->correction_outputs;
 
   for (int i = 0; i < deps->length; i++) {
     if (!VarVector_contains(to_remove, i)) {
@@ -811,7 +812,6 @@ DimRedData* remove_elementary_wires(Circuit* circuit, bool print) {
     }
     printf("}\n\n");
   }
-
   return data_ret;
 }
 
@@ -836,6 +836,7 @@ void remove_randoms(Circuit* circuit) {
   new_deps->deps_size      = deps->deps_size;
   new_deps->first_rand_idx = deps->first_rand_idx;
   new_deps->mult_deps      = deps->mult_deps;
+  new_deps->correction_outputs = deps->correction_outputs;
   new_deps->length         = 0;
   new_deps->deps           = malloc(deps->length * sizeof(*new_deps->deps));
   new_deps->deps_exprs     = malloc(deps->length * sizeof(*new_deps->deps_exprs));

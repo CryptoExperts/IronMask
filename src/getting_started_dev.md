@@ -1,7 +1,7 @@
 Getting started
 ===
 
-This file describes how the code of VRAPS (C version) is organized, as
+This file describes how the code of IronMask is organized, as
 well as what datastructures are used and how.
 
 
@@ -15,24 +15,26 @@ main.c: entry point.
 |--- parser.c: parses the input file into a Circuit data structure (cf circuit.h)
 |
 |
-|--- NI.c, RP.c, RPC.c, RPE.c: verifies the corresponding property
+|--- NI.c, SNI.c, RP.c, RPC.c, RPE.c, cardRPC.c, CNI.c, CRP.c, CRPC.c, freeSNI.c, IOS.c : verifies the corresponding property
 |     |
 |     |--- dimensions.c: reduces the size of the circuit to consider, so that the
-|     |                  enumerative search is less expensive
+|     |                  enumerative search is less expensive. This optimization is only possible for verification of circuits on the binary field.
 |     |
 |     |--- verification_rules.c: applies simplification rules on tuples to determine
-|     |                          whether they are failures or not
-|     |
+|     |                          whether they are failures or not. This is the core file of IronMask and IronMask+
 |     |
 |     |--- coeffs.c: computes coefficients from the failures, 
 |                    mainly in its compute_tree function
 |                    It also computes the failure probability for RP-like properties.
 |
 |
-|--- constructive.c, constructive-mult.c: generates incompressible failure tuples, constructively
+|--- constructive.c, constructive-mult.c: generates incompressible failure tuples, constructively, for binary field (used for the NI security properties).
      |
      |
      |--- failures_from_incompr.c: generates failure tuples from incompressible failures.
+     |
+     |--- constructive_arith.c, constructive-mult_arith.c : generates incompressible failure tuples, constructively, for arithmetic field (i.e characteristic $\neq 2$)
+                                                            These are the core files of IronMaskArithmetic.  
 ```
 
 Some additional files are of interest:
@@ -101,10 +103,10 @@ mean that our dependency list is rather:
 Finally, instead of representing those dependency by a list of
 indices, we represent them using an array of 0 and 1: 0 at index i
 means "no dependency on the i-th variable", while 1 indicates a
-dependency on the i-th variable. One exception to this rule: a single
-index is used for each input, where the bits set indicate on which
-share of the corresponding input the element depends. The dependency
-list above thus is (that's the real one this time):
+dependency on the i-th variable. In IronMask and IronMAsk+, there is one 
+exception to this rule: a single index is used for each input, where the bits 
+set indicate on which share of the corresponding input the element depends. 
+The dependency list above thus is (that's the real one this time):
 
 ```
     [ [1, 0, 0],
@@ -177,6 +179,9 @@ size _n_ is a combination of _n_ elements of the dependency list.
 
 #### Optimized bit-representation
 
+This optimization is only available for the verification of gadgets on binary 
+fields.
+
 When checking if a tuple is a failure, we use a Gaussian
 elimination. One of the operations that is used the most thus consists
 in xoring variables. To do this efficiently, we use the `BitDep`
@@ -185,7 +190,7 @@ integers as a bitvector to represent randoms, and another one to
 represent multiplications. 
 
 Consider a 8-share multiplication gadget. It contains 64
-multiplications. With this representation, the mutliplication part of
+multiplications. With this representation, the multiplication part of
 two variables can be xored with a single xor instead of 64.
 
 In practice, using this optimization provides a speedup of ~x2
@@ -198,7 +203,7 @@ variables.
 As mentionned above, a tuple of size _n_ is a combination of _n_
 elements of the dependency list. To represent a tuple, we thus use an
 array of `Comb` (defined in `combinations.h`). `Comb` is currently a
-`uint8_t`, which means that VRAPS does not work with circuit
+`uint8_t`, which means that IronMask does not work with circuit
 containing more than 255 variables and inputs (to support larger
 circuits, simply changing `Comb` to `int` would be enough, although
 the memory consumption of the tool would increase).

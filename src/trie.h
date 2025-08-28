@@ -32,8 +32,16 @@ int trie_tuples_size(Trie* trie, int size);
 void insert_in_trie(Trie* trie, Comb* comb, int comb_len, SecretDep* secret_deps);
 void insert_in_trie_merge(Trie* trie, Comb* comb, int comb_len,
                           SecretDep* secret_deps, int secret_deps_len);
+void insert_in_trie_merge_arith(Trie* trie, Comb* comb, int comb_len,
+                          SecretDep* secret_deps, int secret_deps_len);
+SecretDep *is_in_trie(Trie *trie, Comb *comb, int comb_len);                          
 SecretDep* trie_contains_subset(Trie* trie, Comb* comb, int comb_len);
 void print_all_tuples(Trie* trie);
 void print_all_tuples_size(Trie* trie, int size);
+Trie *derive_trie_from_subset(Trie *trie, int *subset, int len_subset, 
+                              int circuit_length, int secret_count,
+                              int idx_output_end, int coeff_max);
+                              
 ListComb* list_from_trie(Trie* trie, int comb_len);
 VarVecVector* get_all_tuples(Trie* trie);
+Trie *trie_copy(Trie *trie, int secret_count);

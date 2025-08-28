@@ -1132,7 +1132,7 @@ int _verify_tuples(const Circuit* circuit, // The circuit
   int mult_count          = deps->mult_deps->length;
   int contains_mults      = circuit->contains_mults;
   int corr_outputs_count = deps->correction_outputs->length;
-
+  
   int bit_rand_len = 1 + (random_count / 64);
   int bit_mult_len = (mult_count == 0) ? 0 :  1 + mult_count / 64;
   int bit_correction_outputs_len = (corr_outputs_count == 0) ? 0 : 1 + corr_outputs_count / 64;
@@ -1818,7 +1818,7 @@ int find_first_failure(const Circuit* circuit, // The circuit
                        //     ^^^^^^^^^^^^^^^^
                        // The function to call when a failure is found
                        void* data // additional data to pass to |failure_callback|
-                       ) {
+                       ) {                     
   return _verify_tuples_parallel(circuit, cores, t_in, prefix, comb_len,
                                  max_len, dim_red_data, has_random, first_tuple,
                                  -1, // tuple_count

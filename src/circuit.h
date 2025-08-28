@@ -46,6 +46,8 @@ typedef struct _multDep {
   char * name_right;
   Dependency* left_ptr;
   Dependency* right_ptr;
+  int left_idx;
+  int right_idx;
   int idx_same_dependencies;
   struct _BitDepVector_vector* bits_left;
   struct _BitDepVector_vector* bits_right;
@@ -103,6 +105,7 @@ typedef struct _circuit {
   int* weights;        // Array of size |circuit_length|
   int contains_mults;  // 1 if the circuit contains multiplications, 0 otherwise
   int total_wires;     // Total number of wires
+  int characteristic;  // Charasteristic of the field for the evaluation of the gadget. 
   bool faults_on_inputs;
 
   // The following 3 members are arrays of size deps->deps_size, where
@@ -142,10 +145,13 @@ BitDep * init_bit_dep();
 void set_bit_dep_zero(BitDep* bit_dep);
 void compute_total_wires(Circuit* c);
 void compute_rands_usage(Circuit* c);
+void compute_rands_usage_arith(Circuit* c);
 void compute_contained_secrets(Circuit* c, int ** temporary_mult_idx);
+void compute_contained_secrets_arith(Circuit* c);
 void compute_bit_deps(Circuit* circuit, int ** temporary_mult_idx);
 void compute_total_correction_bit_deps(Circuit * circuit);
 void print_circuit(const Circuit* c);
+void print_circuit_arith(const Circuit* c);
 
 void print_circuit_after_dim_red(const Circuit* c, const Circuit* c_old);
 void free_circuit(Circuit* c);

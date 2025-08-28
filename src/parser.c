@@ -28,8 +28,8 @@ void parse_idents(StrMap* map, char* str) {
 }
 
 
-
-Expr* parse_expr(char* line, char* str) {
+/*
+Expr* parse_expr(char* line, char* str, int characteristic) {
   Expr* ret_e = malloc(sizeof(*ret_e));
   ret_e->left = NULL;
   ret_e->right = NULL;
@@ -84,10 +84,83 @@ Expr* parse_expr(char* line, char* str) {
   }
 
   return ret_e;
+}*/
+
+
+
+Expr* parse_expr(char* line, char* str, int characteristic) {
+  Expr* ret_e = malloc(sizeof(*ret_e));
+  ret_e->left = NULL;
+  ret_e->right = NULL;
+
+  skip_spaces(str);
+  
+  int coeff = 1; // Bydefault, the coefficient of a variable is set to 1.
+  int end = 0;
+  while (!is_eol(str[end]) && !is_space(str[end]) && !is_operator(str[end]) && !is_coeff(str,end)) end++;
+
+  if (is_coeff(str,end)){
+    while (is_number(str[end])) end++;
+    char *str_coeff = strndup(str, end);
+    sscanf(str_coeff, "%d", &coeff);
+    coeff %= characteristic;
+    coeff = coeff < 0 ? coeff + characteristic: coeff;   
+    free(str_coeff);
+    
+    str += end;
+    skip_spaces(str);
+    end = 0;
+    while (!is_eol(str[end]) && !is_space(str[end]) && !is_operator(str[end])) end++;  
+  } 
+  
+  
+  ret_e->left = strndup(str, end);
+  ret_e->coeff_left = coeff;
+  
+  str += end;
+  skip_spaces(str);
+  
+  if (is_eol(*str)) {
+    ret_e->op = Asgn;
+  } else if (is_add(*str)) {
+    ret_e->op = Add;
+  } else if (is_mult(*str)) {
+    ret_e->op = Mult;
+  } else {
+    fprintf(stderr, "Error in line '%s': operator expected, got '%c'. Exiting.\n",
+            line, *str);
+    exit(EXIT_FAILURE);
+  }
+
+  if (ret_e->op != Asgn) {
+    str++;
+    skip_spaces(str);
+
+    end = 0;
+    coeff = 1;
+    while (!is_eol(str[end]) && !is_space(str[end]) && !is_operator(str[end]) && !is_coeff(str,end)) end++;
+    
+    if (is_coeff(str,end)) {
+      while (is_number(str[end])) end++;
+      char *str_coeff = strndup(str, end);
+      sscanf(str_coeff, "%d", &coeff);
+      free(str_coeff);
+      coeff %= characteristic;
+      coeff = coeff < 0 ? coeff + characteristic: coeff;   
+      str += end;
+      skip_spaces(str);
+      end = 0;
+      while (!is_eol(str[end]) && !is_space(str[end]) && !is_operator(str[end])) end++;  
+    } 
+    
+    ret_e->right = strndup(str, end);
+    ret_e->coeff_right = coeff;
+  }
+
+  return ret_e;
 }
 
-
-void parse_eq_str(EqList* eqs, char* str) {
+void parse_eq_str(EqList* eqs, char* str, int characteristic) {
   bool anti_glitch = false;
   bool correction_output = false;
   bool correction = false;
@@ -139,7 +212,7 @@ void parse_eq_str(EqList* eqs, char* str) {
     }
   }
 
-  Expr* e = parse_expr(str_start, str);
+  Expr* e = parse_expr(str_start, str, characteristic);
   add_eq_list(eqs, dst, e, anti_glitch, correction, correction_output);
 
   //if(correction_output) printf("%s is correction output\n", dst);
@@ -152,7 +225,7 @@ ParsedFile* parse_file(char* filename) {
     exit(EXIT_FAILURE);
   }
 
-  int order = -1, shares = -1, nb_duplications = 1;
+  int order = -1, shares = -1, nb_duplications = 1, characteristic = 2;
   StrMap* in = make_str_map("in");
   StrMap* randoms = make_str_map("randoms");
   StrMap* out = make_str_map("out");
@@ -198,12 +271,22 @@ ParsedFile* parse_file(char* filename) {
         parse_idents(out, &line[i+6]);
       } else if (str_equals_nocase(&line[i], "OUT", 3)) {
         parse_idents(out, &line[i+3]);
+      } else if (str_equals_nocase(&line[i], "CAR", 3)) {  
+        if (sscanf(&line[i + 3], "%d", &characteristic) != 1) {
+          fprintf(stderr, "Missing number on line '%s'.\n", line);
+          exit(EXIT_FAILURE);
+        }
+      } else if (str_equals_nocase(&line[i], "CHARACTERISTIC", 14)) {
+        if (sscanf(&line[i + 14], "%d", &characteristic) != 1) {
+          fprintf(stderr, "Missing number on line '%s'.\n", line);
+          exit(EXIT_FAILURE);
+        }
       } else {
         fprintf(stderr, "Unrecognized line '%s'. Ignoring it.\n", line);
       }
     } else {
       // Equation line
-      parse_eq_str(eqs, line);
+      parse_eq_str(eqs, line, characteristic);
     }
   }
   free(line);
@@ -231,6 +314,7 @@ ParsedFile* parse_file(char* filename) {
   pf->nb_duplications = nb_duplications;
   pf->shares = shares;
   pf->filename = strdup(filename);
+  pf->characteristic = characteristic;
 
   return pf;
 }
@@ -503,10 +587,10 @@ inline void add_elem_dep(char * name, int dep_idx, Dependency d,
   deps->names[add_idx]      = strdup(name);
 
   memcpy(original_deps[add_idx], dep, deps_size*sizeof(*dep));
-
   dep_map_add(deps_map, strdup(name), dep, dep_arr, original_deps[add_idx]);
   str_map_add(positions_map, strdup(name));
-  split[add_idx] = false;
+  if (split)
+    split[add_idx] = false;
 }
 
 
@@ -1021,6 +1105,7 @@ Circuit* gen_circuit(ParsedFile * pf, bool glitch, bool transition, Faults * fv)
   c->transition      = transition;
   c->glitch          = glitch;
   c->faults_on_inputs = faults_on_inputs;
+  c->characteristic = 2;
 
 
   compute_total_wires(c);
@@ -1059,3 +1144,231 @@ Circuit* gen_circuit(ParsedFile * pf, bool glitch, bool transition, Faults * fv)
 
   return c;
 }
+
+
+
+
+
+Circuit* gen_circuit_arith (ParsedFile * pf, int characteristic){
+  
+  StrMap* in = pf->in;
+  StrMap* randoms = pf->randoms;
+  StrMap* out = pf->out;
+  EqList* eqs = pf->eqs;
+  bool glitch = false; //TODO : Remove this.
+  bool transition = false; //TODO : Remove this.
+  int shares = pf->shares;
+
+  
+  Circuit* c = malloc(sizeof(*c));  
+  
+  int circuit_size = eqs->size;
+  int mult_count = count_mults(eqs);
+  int linear_deps_size = in->next_val * shares + randoms->next_val;
+  int deps_size = linear_deps_size + mult_count;
+
+  MultDependencyList* mult_deps = malloc(sizeof(*mult_deps));
+  mult_deps->length = mult_count;
+  mult_deps->deps = malloc(mult_count * sizeof(*(mult_deps->deps)));
+
+  DependencyList* deps = malloc(sizeof(*deps));
+  deps->length         = circuit_size + randoms->next_val +
+                         in->next_val * shares;
+  deps->deps_size      = deps_size;
+  deps->first_rand_idx = in->next_val * shares;
+  deps->first_mult_idx = deps->first_rand_idx + randoms->next_val;
+  
+  deps->deps           = malloc(deps->length * sizeof(*deps->deps));
+  deps->deps_exprs     = malloc(deps->length * sizeof(*deps->deps_exprs));
+  deps->names          = malloc(deps->length * sizeof(*deps->names));
+  deps->mult_deps      = mult_deps;
+
+  OriginalDeps * orig_deps_struct = init_original_deps(deps->length, mult_count, deps_size);
+  Dependency ** original_deps = orig_deps_struct->original_deps;
+  OriginalMultPtrs ** original_mult_ptrs = orig_deps_struct->original_mult_ptrs;
+
+  DepMap* deps_map = make_dep_map("Dependencies");
+
+  int* weights = calloc(deps->length, sizeof(*weights));
+  StrMap* positions_map = make_str_map("Positions");
+
+  int add_idx = 0, mult_idx = 0;
+  // Initializing dependencies with inputs
+  for (StrMapElem* e = in->head; e != NULL; e = e->next) {
+    int len = strlen(e->key) + 1 + 2; // +1 for '\0' and +2 for share number
+    for (int i = 0; i < shares; i++) {
+      char* name = malloc(len * sizeof(*name));
+      snprintf(name, len, "%s%d", e->key, i);
+      add_elem_dep(name, add_idx, 1, deps_size, add_idx, deps_map, positions_map, NULL, original_deps, deps);
+      //Dependency* dep = calloc(deps_size, sizeof(*dep));
+      //dep[add_idx] = 1;
+      //DepArrVector* dep_arr = DepArrVector_make();
+      //DepArrVector_push(dep_arr, dep);
+      //deps->deps[add_idx]       = dep_arr;
+      //deps->deps_exprs[add_idx] = dep;
+      //deps->names[add_idx]      = strdup(name);
+      //dep_map_add(deps_map, name, dep, dep_arr);
+      //str_map_add(positions_map, strdup(name));
+      add_idx += 1;
+      free(name);
+    }
+  }
+  
+  
+  // Initializing random dependencies
+  for (StrMapElem* e = randoms->head; e != NULL; e = e->next, add_idx++) {
+    add_elem_dep(e->key, add_idx, 1, deps_size, add_idx, deps_map, positions_map, NULL, original_deps, deps);
+    //Dependency* dep = calloc(deps_size, sizeof(*dep));
+    //dep[add_idx] = 1;
+    //DepArrVector* dep_arr = DepArrVector_make();
+    //DepArrVector_push(dep_arr, dep);
+    //deps->deps[add_idx]       = dep_arr;
+    //deps->deps_exprs[add_idx] = dep;
+    //deps->names[add_idx]      = strdup(e->key);
+    //dep_map_add(deps_map, strdup(e->key), dep, dep_arr);
+    //str_map_add(positions_map, strdup(e->key));
+  }
+
+
+  // Adding dependencies of other instructions
+  for (EqListElem* e = eqs->head; e != NULL; e = e->next, add_idx++) {
+    Dependency* dep;
+    DepMapElem* left  = dep_map_get(deps_map, e->expr->left);
+    DepMapElem* right = e->expr->op != Asgn ? dep_map_get(deps_map, e->expr->right) : NULL;
+    
+    
+    // Computing dependency |dep|
+    if (e->expr->op == Asgn) {
+      dep = calloc(deps_size, sizeof(*dep));
+      dep = memcpy(dep, left->std_dep, sizeof(*dep));
+    } else if (e->expr->op == Add) {
+      dep = calloc(deps_size, sizeof(*dep));
+      for (int i = 0; i < deps_size; i++) {
+        dep[i] = (int) ((e->expr->coeff_left * left->std_dep[i] + e->expr->coeff_right * right->std_dep[i])) % characteristic; //TODO : Rajouter des coefficients à Eq
+      }
+    } else { // multiplication
+      MultDependency* mult_dep = malloc(sizeof(*mult_dep));
+      mult_dep->left_ptr  = left->std_dep;
+      mult_dep->right_ptr = right->std_dep;
+      mult_dep->name = strdup(e->dst);
+      mult_dep->name_left = strdup(e->expr->left);
+      mult_dep->name_right = strdup(e->expr->right);
+      mult_dep->left_idx  = str_map_get(positions_map, e->expr->left);
+      mult_dep->right_idx = str_map_get(positions_map, e->expr->right);
+      mult_dep->contained_secrets = NULL;
+      mult_dep->idx_same_dependencies = mult_idx;
+      mult_deps->deps[mult_idx] = mult_dep;
+
+      dep = calloc(deps_size, sizeof(*dep));
+      dep[linear_deps_size + mult_idx] = (e->expr->coeff_left * e->expr->coeff_right) % characteristic;
+      mult_idx++;  
+    }
+
+    // Taking glitches and transitions into account. We ignore the
+    // interaction between glitches and transitions are assume that
+    // either glitches or (exclusively) transitions are to be
+    // considered.
+    DepArrVector* dep_arr = DepArrVector_make();
+    DepArrVector_push(dep_arr, dep);
+
+    // Updating weights
+    int left_idx = str_map_get(positions_map, e->expr->left);
+    weights[left_idx] += weights[left_idx] == 0 ? 1 : 2;
+    if (e->expr->op != Asgn) {
+      int right_idx = str_map_get(positions_map, e->expr->right);
+      weights[right_idx] += weights[right_idx] == 0 ? 1 : 2;
+    }
+
+    // Adding to deps
+    deps->deps[add_idx]       = dep_arr;
+    deps->deps_exprs[add_idx] = dep;
+    deps->names[add_idx]      = strdup(e->dst);
+    dep_map_add(deps_map, strdup(e->dst), dep, dep_arr, NULL);
+    str_map_add(positions_map, strdup(e->dst));
+  }
+
+  // Moving outputs to the end
+  StrMap* outputs_map = make_str_map("outputs expanded");
+  for (StrMapElem* e = out->head; e != NULL; e = e->next) {
+    int len = strlen(e->key) + 1 + 3; // +1 for '\0' and +3 for share number
+    for (int i = 0; i < shares; i++) {
+      char* name = malloc(len * sizeof(*name));
+      snprintf(name, len, "%s%d", e->key, i);
+      str_map_add_with_val(outputs_map, name, 1);
+    }
+  }
+  // Finding first index (from the end) that does not contain an output
+  int end_idx = add_idx-1;
+  while (str_map_contains(outputs_map, deps->names[end_idx])) {
+    str_map_remove(outputs_map, deps->names[end_idx]);
+    end_idx--;
+  }
+  // Finding outputs and swapping them to the end
+#define SWAP(_type, _v1, _v2) {                 \
+    _type _tmp = _v1;                           \
+    _v1 = _v2;                                  \
+    _v2 = _tmp;                                 \
+  }
+#define SWAP_DEPS(i1,i2) {                                          \
+    SWAP(char*, deps->names[i1], deps->names[i2]);                  \
+    SWAP(DepArrVector*, deps->deps[i1], deps->deps[i2]);             \
+    SWAP(Dependency*, deps->deps_exprs[i1], deps->deps_exprs[i2]);  \
+    SWAP(int, weights[i1], weights[i2]);                            \
+  }
+  for (int i = end_idx-1; i >= 0; i--) {
+    if (str_map_contains(outputs_map, deps->names[i])) {
+      // Shifting all elements between |i| and |end_idx| to the left
+      for (int j = i; j < end_idx; j++) {
+        SWAP_DEPS(j, j+1);
+      }
+      str_map_remove(outputs_map, deps->names[end_idx]);
+      end_idx--;
+      while (str_map_contains(outputs_map, deps->names[end_idx])) {
+        str_map_remove(outputs_map, deps->names[end_idx]);
+        end_idx--;
+      }
+    }
+  }
+
+  // Updating weights of outputs that were not used after being
+  // computed (and whose weight is thus still 0)
+  for (int i = 0; i < add_idx; i++) {
+    if (!weights[i]) weights[i] = 1;
+  }
+
+  c->length          = deps->length - out->next_val * shares;
+  c->deps            = deps;
+  c->secret_count    = in->next_val;
+  c->output_count    = out->next_val;
+  c->share_count     = shares;
+  c->random_count    = randoms->next_val;
+  c->weights         = weights;
+  c->all_shares_mask = (1 << shares) - 1;
+  c->contains_mults  = mult_idx != 0;
+  c->transition      = transition;
+  c->glitch          = glitch;
+  c->characteristic  = characteristic;
+  
+  if(pf->nb_duplications)
+    c->nb_duplications = pf->nb_duplications;
+
+  compute_total_wires(c);
+  compute_rands_usage_arith(c);
+  compute_contained_secrets_arith(c);
+
+  //print_circuit(c);
+
+
+  free_original_deps(orig_deps_struct);
+  //free_str_map(in);
+  //free_str_map(randoms);
+  //free_str_map(out);
+  free_str_map(outputs_map);
+  free_str_map(positions_map);
+  free_dep_map(deps_map);
+  //free_eq_list(eqs);
+
+  return c;
+}
+
+

@@ -13,6 +13,7 @@
 #include "verification_rules.h"
 #include "dimensions.h"
 #include "constructive.h"
+#include "constructive_arith.h"
 
 
 struct callback_data {
@@ -38,17 +39,36 @@ static void display_failure(const Circuit* c, Comb* comb, int comb_len, SecretDe
   printf("])\n\n");
 }
 
-int compute_NI_constr(Circuit* circuit, int t) {
+#define min(a,b) ((a) > (b) ? (b) : (a))
 
-  Trie* incompr = compute_incompr_tuples(circuit,
-                                         t+1, // t_in
-                                         NULL, // prefix
-                                         t, // max_size
-                                         true, // include_outputs
-                                         -1, // min_outputs
-                                         0 // debug
-                                         );
+int compute_NI_constr(Circuit* circuit, int t, int cores) {
 
+  Trie* incompr;
+  
+  if (circuit->characteristic != 2){
+    incompr = compute_incompr_tuples_arith(circuit,
+                                           t + 1, // t_in
+                                           NULL, // prefix
+                                           t, // max_size
+                                           true, // include_outputs
+                                           -1, // min_outputs
+                                           false,//remove_output
+                                           cores,
+                                           true, //one_failure
+                                           0 // debug
+                                           );
+  }
+  
+  else {
+    incompr = compute_incompr_tuples(circuit,
+                                     t+1, // t_in
+                                     NULL, // prefix
+                                     t, // max_size
+                                     true, // include_outputs
+                                     -1, // min_outputs
+                                     0 // debug
+                                     );
+  }
   if (trie_size(incompr)) {
     printf("Gadget is not NI. "
            "The following tuples contain %d probes (or less), "
@@ -58,7 +78,7 @@ int compute_NI_constr(Circuit* circuit, int t) {
     printf("\n");
     return 0;
   }
-
+  free_trie(incompr);
   printf("Gadget is %d-NI.\n\n", t);
   return 1;
 }
@@ -67,9 +87,13 @@ int compute_NI(Circuit* circuit, int cores, int t) {
   //Var* unused;
   //refine_circuit(circuit, &unused);
 
+  if (circuit->characteristic != 2) {
+    return compute_NI_constr(circuit, t, cores);
+  }
+
   if (! circuit->contains_mults) {
     advanced_dimension_reduction(circuit);
-    return compute_NI_constr(circuit, t);
+    return compute_NI_constr(circuit, t, cores);
   }
 
   DimRedData* dim_red_data = remove_elementary_wires(circuit, true);

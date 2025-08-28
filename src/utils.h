@@ -28,7 +28,8 @@ typedef struct _EqList EqList;
 int str_equals_nocase(char* s1, char* s2, int len);
 int is_space(char c);
 int is_eol(char c);
-
+int is_number (char c);
+int is_coeff (char* s, int index);
 
 /* ***************************************************** */
 /*              String/Int map utilities                 */
@@ -95,7 +96,9 @@ typedef enum { Asgn, Add, Mult } Operator;
 typedef struct _expr {
   Operator op;
   char* left;
+  int coeff_left;
   char* right;
+  int coeff_right;
 } Expr;
 
 typedef struct _EqListElem {
@@ -162,6 +165,7 @@ typedef struct _parsed_file{
   EqList* eqs;
   bool glitch;
   bool transition;
+  int characteristic;
 }ParsedFile;
 
 typedef struct _fault_comb{
