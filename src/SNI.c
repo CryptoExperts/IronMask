@@ -103,11 +103,7 @@ void compute_SNI(Circuit* circuit, int cores, int t) {
   }
   
   DimRedData* dim_red_data = remove_elementary_wires(circuit, true);
-  CorrectionOutputs * test = circuit->deps->correction_outputs;
-  printf("\n ************* \n\n corr_outputs_count = %d\n **************** \n\n", test->length); 
   advanced_dimension_reduction(circuit);
-  CorrectionOutputs *test2 = circuit->deps->correction_outputs;
-  printf("\n ************* \n\n corr_outputs_count = %d\n **************** \n\n", test2->length); 
 
   /* if (! circuit->contains_mults) { */
   /*   compute_SNI_with_incompr(circuit, t); */
@@ -120,9 +116,6 @@ void compute_SNI(Circuit* circuit, int cores, int t) {
      remove_randoms(circuit);
   }
   
-  CorrectionOutputs * test3 = circuit->deps->correction_outputs;
-  printf("\n ************* \n\n corr_outputs_count = %d\n **************** \n\n", test3->length); 
-
   struct callback_data data = { .sni_order = t };
 
   // Checking for out_size = 0 (basically like checking NI but excluding outputs)

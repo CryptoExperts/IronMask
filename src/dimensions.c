@@ -621,7 +621,7 @@ void advanced_dimension_reduction(Circuit* circuit) {
   new_deps->names          = malloc(deps->length * sizeof(*new_deps->names));
   new_deps->contained_secrets = malloc(deps->length * sizeof(*new_deps->contained_secrets));
   new_deps->bit_deps       = malloc(deps->length * sizeof(*new_deps->bit_deps));
-  //new_deps->correction_outputs = circuit->deps->correction_outputs;
+  new_deps->correction_outputs = circuit->deps->correction_outputs;
 
   for (int i = 0; i < deps->length; i++) {
     if (!VarVector_contains(to_remove, i)) {

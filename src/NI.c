@@ -97,7 +97,7 @@ int compute_NI(Circuit* circuit, int cores, int t) {
   }
 
   DimRedData* dim_red_data = remove_elementary_wires(circuit, true);
-
+  
   advanced_dimension_reduction(circuit);
 
   bool has_random = true;
@@ -107,8 +107,6 @@ int compute_NI(Circuit* circuit, int cores, int t) {
   }*/
 
   //print_circuit(circuit);
-
-  printf("here\n");
 
   struct callback_data data = { .ni_order = t };
 

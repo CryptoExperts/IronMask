@@ -1192,7 +1192,6 @@ int _verify_tuples(const Circuit* circuit, // The circuit
 
   if (comb_len == 0) {
     if (failure_callback && comb_free_space) {
-      //printf("here %d\n", max_len);
       Comb curr_comb[max_len];
       return expand_tuple_to_failure(circuit, t_in, shares_to_ignore,
                                      curr_comb, comb_len, leaky_inputs, secret_deps,
