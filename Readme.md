@@ -302,6 +302,12 @@ The file
 presents our constructive algorithm to generate incompressible tuples,
 as well as some ideas and suggestions to improve its performance.
 
+## Tests
+
+Tests are provided to evaluate the reliability of IronMaskArithmetic’s code, 
+both with and without parallelization, and for all security properties verified 
+by IronMaskArithmetic. To run them, simply execute the script 
+`test/test_car_q.sh`.
 ## License
 
 [GPLv3](https://www.gnu.org/licenses/gpl-3.0.en.html)
