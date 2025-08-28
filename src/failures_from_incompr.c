@@ -588,7 +588,7 @@ void compute_failures_from_incompressibles(const Circuit* c, Trie* incompr,
 
   HashMap* curr = init_hash(1);
   HashMap* next = init_hash(0);
-  for (int i = -1; i < coeff_max; i++) {
+  for (int i = 0; i < coeff_max; i++) {
     next->comb_len = i + 1;
     expand_tuples(curr, next, var_count);
     add_incompr_to_map(next, incompr, i + 1, var_count);

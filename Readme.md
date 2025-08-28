@@ -230,9 +230,20 @@ are printed to illustrate that.
 
 ### Output of Random Probing Verification (RP, RPC, RPE)
 
-When checking RP, RPC or RPE, the coefficients computed for the
-function f(p) are shown, as well as the min/max failure probability
-computed from f(p). The output is fairly self-explanatory.
+When analyzing RP, RPC, or RPE, the coefficients $c_i$ of the function $f(p)$ 
+are displayed. Each coefficient $c_i$ corresponds to the number of tuples of 
+size $i$ that are failure tuples for the security property. In other words, 
+tuples that require more input shares to simulate the leakage than the property 
+permits. Alongside these coefficients, the minimum and maximum failure 
+probabilities derived from f(p) are also shown. The output is generally 
+self-explanatory.
+
+** Warning : ** Depending on the security property studied, the output list f(p)
+can start by $c_1$ (i.e. numbers of failure tuples of size 1) or $c_0$ 
+(i.e. the empty tuple).
+- For RP security notion, the coefficients start at $c_1$.
+- For RPC/RPE security notions, the coefficients starts at $c_0$.
+
 
 ### Output of Cardinal Random Probing Composition Verification (cardRPC)
 
@@ -285,7 +296,8 @@ tin = 2, tout = 2
 
 Verification completed in 0 min 0 sec.
 ```
-
+** Warning : ** Again here, the output lists start at $c_0$ for the cardRPC 
+notion.
 
 
 ## Internals
