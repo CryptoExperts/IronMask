@@ -1240,7 +1240,9 @@ Circuit* gen_circuit_arith (ParsedFile * pf, int characteristic){
     // Computing dependency |dep|
     if (e->expr->op == Asgn) {
       dep = calloc(deps_size, sizeof(*dep));
-      dep = memcpy(dep, left->std_dep, sizeof(*dep));
+      for (int i = 0; i < deps_size; i++) {
+        dep[i] = (int) (e->expr->coeff_left * left->std_dep[i]) % characteristic;
+      }
     } else if (e->expr->op == Add) {
       dep = calloc(deps_size, sizeof(*dep));
       for (int i = 0; i < deps_size; i++) {
